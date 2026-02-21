@@ -236,7 +236,7 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint }: Props) 
           const { endpoint } = row
           const methodColor = METHOD_COLORS[endpoint.method]
           return (
-            <Box key={endpoint.id} paddingLeft={2}>
+            <Box key={`${row.tag}-${endpoint.id}`} paddingLeft={2}>
               <Text
                 inverse={isSelected}
                 strikethrough={endpoint.deprecated}
