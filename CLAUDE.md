@@ -44,6 +44,7 @@ CLI entry point compiles to `./dist/cli.js`. The `bin` field in package.json map
 
 - Build uses `build.ts` (Bun build API), not a raw CLI command — needed to stub `react-devtools-core` which Ink 6 imports statically and breaks node runtime
 - Lockfile is `bun.lock` (not `bun.lockb`) as of Bun 1.3+
+- `.worktrees/` directory is gitignored — used for isolated feature development
 
 ## Repository
 
@@ -72,6 +73,14 @@ CLI entry point compiles to `./dist/cli.js`. The `bin` field in package.json map
 - **HTTP Client** — Sends requests to endpoints using selected server + auth
 - **Config Manager** — Reads/writes `~/.superapi-tui.json` (saved servers, auth presets, UI preferences)
 
+### Data Layer
+
+- **Types:** `src/types/` — All domain types (SchemaInfo, Endpoint, ParsedSpec, etc.) with barrel export from `index.ts`
+- **Utils:** `src/utils/` — url, http-method, yaml helpers with barrel export
+- **Loader:** `src/loader/` — `loadSpec(input)` handles files, URLs, Swagger UI auto-detection. Returns `LoadResult`
+- **Parser:** `src/parser/` — `parseSpec(content)` validates with @scalar/openapi-parser, resolves $refs, transforms to `ParsedSpec`
+- Pipeline: `loadSpec(input) → parseSpec(result.content) → ParsedSpec`
+
 ### Data Flow
 
 ```
@@ -95,6 +104,29 @@ Three methods, configurable per-session or via config file:
 ### Keyboard Navigation
 
 Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), `q`/`Ctrl+C` (quit), `/` (filter), `?` (help), `f` (fullscreen toggle). Navigation: `hjkl`/arrow keys, `g`/`G` (top/bottom). Request panel: `s` (send), `e` (edit body), `S` (switch server), `a` (auth config), `1`/`2`/`3` (response tabs).
+
+## Testing
+
+- Tests use `bun:test` — `describe`, `test`, `expect`, `mock`
+- Mock `fetch` with: `globalThis.fetch = mock(() => ...) as unknown as typeof fetch` (cast through `unknown` — Bun's fetch type has extra properties)
+- `mock.restore()` in `afterEach` to clean up mocks
+- Test fixtures live in `src/__tests__/fixtures/`
+- Path alias `@/*` → `src/*` works in tests via tsconfig
+
+## Dependencies — Gotchas
+
+- `@scalar/openapi-parser` requires `ajv` as peer dep — install both
+- `@scalar/openapi-parser`'s `dereference()` is synchronous despite returning `{ schema }` — no `await` needed
+- `yaml` package: import as `import YAML from 'yaml'`
+
+## Code Conventions
+
+- Error chaining: use ES2022 `super(message, { cause })` — never shadow `cause` as a class field
+- Prefer `readonly` on all interface fields and `ReadonlyMap`/`readonly T[]` for collections
+- Literal union types over plain `string` when possible (e.g., `'apiKey' | 'http' | 'oauth2' | 'openIdConnect'`)
+- No silent fallbacks in parsers — fail explicitly with descriptive errors
+- SSRF protection: validate protocol (http/https only) before `fetch()`
+- Circular reference detection: use path-scoped ancestor tracking (`WeakSet` with add/delete), not global visitation
 
 ## Design Decisions
 
