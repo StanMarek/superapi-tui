@@ -23,8 +23,11 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@scalar/openapi-parser": "^0.24.13",
+    "ajv": "^8.18.0",
     "ink": "^6.8.0",
-    "react": "^19.2.4"
+    "react": "^19.2.4",
+    "yaml": "^2.8.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
