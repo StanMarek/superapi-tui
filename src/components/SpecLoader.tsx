@@ -3,6 +3,7 @@ import { Box, Text } from 'ink'
 import { Spinner } from '@inkjs/ui'
 import { loadSpec } from '@/loader/index.js'
 import { parseSpec } from '@/parser/index.js'
+import App from '@/App.js'
 import type { ParsedSpec } from '@/types/index.js'
 
 interface Props {
@@ -87,15 +88,5 @@ export function SpecLoader({ input }: Props) {
     )
   }
 
-  // Loaded state — App component will be wired in Task 7
-  return (
-    <Box flexDirection="column" padding={1}>
-      <Text bold color="green">
-        Spec loaded: {state.spec.info.title}
-      </Text>
-      <Text dimColor>
-        v{state.spec.info.version} — {state.spec.endpoints.length} endpoints
-      </Text>
-    </Box>
-  )
+  return <App spec={state.spec} />
 }

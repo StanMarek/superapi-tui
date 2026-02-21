@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { render } from 'ink'
-import App from './App.js'
+import { SpecLoader } from './components/SpecLoader.js'
 
-render(<App />)
+const input = process.argv[2]
+render(<SpecLoader input={input} />)
