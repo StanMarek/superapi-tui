@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Tech Stack
 
 - **Runtime:** Bun
-- **TUI Framework:** Ink (React-based terminal rendering)
+- **TUI Framework:** Ink 6 + React 19 (React-based terminal rendering)
 - **Language:** TypeScript
 - **Distribution:** npm package (`superapi-tui`), runnable via `npx`/`bunx`
 
@@ -39,6 +39,16 @@ bun run lint
 ```
 
 CLI entry point compiles to `./dist/cli.js`. The `bin` field in package.json maps `superapi-tui` to this path.
+
+## Build Gotchas
+
+- Build uses `build.ts` (Bun build API), not a raw CLI command — needed to stub `react-devtools-core` which Ink 6 imports statically and breaks node runtime
+- Lockfile is `bun.lock` (not `bun.lockb`) as of Bun 1.3+
+
+## Repository
+
+- **GitHub:** `StanMarek/superapi-tui`
+- **Default branch:** `master`
 
 ## Architecture
 
