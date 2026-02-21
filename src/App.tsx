@@ -10,7 +10,7 @@ interface Props {
 }
 
 export default function App({ spec }: Props) {
-  const { focusedPanel, selectedEndpoint, selectEndpoint } = useNavigation()
+  const { focusedPanel, selectedEndpoint, selectEndpoint, setTextCapture } = useNavigation()
 
   return (
     <Box flexDirection="row" width="100%" height="100%">
@@ -24,6 +24,7 @@ export default function App({ spec }: Props) {
           tagGroups={spec.tagGroups}
           isFocused={focusedPanel === 'endpoints'}
           onSelectEndpoint={selectEndpoint}
+          onTextCaptureChange={setTextCapture}
         />
       </Box>
       <Box

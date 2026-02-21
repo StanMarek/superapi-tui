@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Box, Text, useInput } from 'ink'
 import type { Endpoint, TagGroup } from '@/types/index.js'
 import { METHOD_COLORS } from '@/utils/http-method.js'
@@ -11,6 +11,7 @@ interface Props {
   readonly tagGroups: readonly TagGroup[]
   readonly isFocused: boolean
   readonly onSelectEndpoint: (endpoint: Endpoint) => void
+  readonly onTextCaptureChange?: (active: boolean) => void
 }
 
 function buildRows(
@@ -55,25 +56,20 @@ function getTagAtCursor(
   return row?.tag ?? null
 }
 
-export function EndpointList({ tagGroups, isFocused, onSelectEndpoint }: Props) {
+export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCaptureChange }: Props) {
   const [cursorIndex, setCursorIndex] = useState(0)
   const [collapsedTags, setCollapsedTags] = useState<ReadonlySet<string>>(new Set())
   const [filterText, setFilterText] = useState('')
   const [isFiltering, setIsFiltering] = useState(false)
 
+  // Notify parent when text capture mode changes (prevents q from quitting during filter)
+  useEffect(() => {
+    onTextCaptureChange?.(isFiltering)
+  }, [isFiltering, onTextCaptureChange])
+
   const rows = useMemo(() => {
-    if (isFiltering && filterText.length > 0) {
-      return buildFilteredRows(tagGroups, filterText)
-    }
     if (isFiltering) {
-      // Filtering mode active but no text yet: show all endpoints flat
-      const allRows: ListRow[] = []
-      for (const group of tagGroups) {
-        for (const endpoint of group.endpoints) {
-          allRows.push({ kind: 'endpoint', endpoint, tag: group.name })
-        }
-      }
-      return allRows
+      return buildFilteredRows(tagGroups, filterText)
     }
     return buildRows(tagGroups, collapsedTags)
   }, [tagGroups, collapsedTags, isFiltering, filterText])
@@ -128,20 +124,14 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint }: Props) 
           return
         }
         if (key.backspace || key.delete) {
-          setFilterText(prev => {
-            const next = prev.slice(0, -1)
-            setCursorIndex(0)
-            return next
-          })
+          setFilterText(prev => prev.slice(0, -1))
+          setCursorIndex(0)
           return
         }
         // Accumulate typed characters (ignore control keys)
         if (input && !key.ctrl && !key.meta) {
-          setFilterText(prev => {
-            const next = prev + input
-            setCursorIndex(0)
-            return next
-          })
+          setFilterText(prev => prev + input)
+          setCursorIndex(0)
         }
         return
       }
@@ -170,7 +160,7 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint }: Props) 
       }
 
       if (input === 'G') {
-        setCursorIndex(rows.length - 1)
+        setCursorIndex(clampCursor(rows.length - 1))
         return
       }
 

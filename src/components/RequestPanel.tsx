@@ -1,5 +1,6 @@
 import { Box, Text } from 'ink'
 import type { Endpoint } from '@/types/index.js'
+import { METHOD_COLORS } from '@/utils/http-method.js'
 
 interface Props {
   readonly endpoint: Endpoint | null
@@ -12,7 +13,7 @@ export function RequestPanel({ endpoint, isFocused }: Props) {
       <Text bold dimColor={!isFocused}>Request / Response</Text>
       {endpoint ? (
         <Box marginTop={1}>
-          <Text color="cyan">{endpoint.method.toUpperCase()}</Text>
+          <Text color={METHOD_COLORS[endpoint.method]}>{endpoint.method.toUpperCase()}</Text>
           <Text> {endpoint.path}</Text>
         </Box>
       ) : (

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Box, Text } from 'ink'
+import { Box, Text, useApp } from 'ink'
 import { Spinner } from '@inkjs/ui'
 import { loadSpec } from '@/loader/index.js'
 import { parseSpec } from '@/parser/index.js'
@@ -17,6 +17,7 @@ type State =
   | { readonly phase: 'error'; readonly message: string }
 
 export function SpecLoader({ input }: Props) {
+  const { exit } = useApp()
   const [state, setState] = useState<State>(
     input ? { phase: 'loading', message: `Loading spec from ${input}...` } : { phase: 'no-input' },
   )
@@ -49,6 +50,16 @@ export function SpecLoader({ input }: Props) {
       cancelled = true
     }
   }, [input])
+
+  // Exit after showing error for a moment
+  useEffect(() => {
+    if (state.phase !== 'error') return
+    const timer = setTimeout(() => {
+      process.exitCode = 1
+      exit()
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [state.phase, exit])
 
   if (state.phase === 'no-input') {
     return (
