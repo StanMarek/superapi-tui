@@ -65,16 +65,12 @@ describe('transformEndpoint', () => {
   })
 
   test('merges path-level and operation-level parameters', () => {
-    const pathParams = [
-      { name: 'petId', in: 'path', required: true, schema: { type: 'string' } },
-    ]
+    const pathParams = [{ name: 'petId', in: 'path', required: true, schema: { type: 'string' } }]
     const result = transformEndpoint(
       '/pets/{petId}',
       'get',
       {
-        parameters: [
-          { name: 'include', in: 'query', schema: { type: 'string' } },
-        ],
+        parameters: [{ name: 'include', in: 'query', schema: { type: 'string' } }],
         responses: { '200': { description: 'OK' } },
       },
       pathParams,
@@ -88,14 +84,26 @@ describe('transformEndpoint', () => {
 
   test('operation params override same-name path params', () => {
     const pathParams = [
-      { name: 'petId', in: 'path', required: true, schema: { type: 'string' }, description: 'from path' },
+      {
+        name: 'petId',
+        in: 'path',
+        required: true,
+        schema: { type: 'string' },
+        description: 'from path',
+      },
     ]
     const result = transformEndpoint(
       '/pets/{petId}',
       'get',
       {
         parameters: [
-          { name: 'petId', in: 'path', required: true, schema: { type: 'integer' }, description: 'from op' },
+          {
+            name: 'petId',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer' },
+            description: 'from op',
+          },
         ],
         responses: { '200': { description: 'OK' } },
       },

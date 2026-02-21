@@ -146,13 +146,9 @@ export function transformSchema(
   const anyOf = transformComposition(schema.anyOf, seen)
 
   // Extract enum
-  const enumValues = Array.isArray(schema.enum)
-    ? schema.enum.map((v) => String(v))
-    : undefined
+  const enumValues = Array.isArray(schema.enum) ? schema.enum.map((v) => String(v)) : undefined
 
-  const required = Array.isArray(schema.required)
-    ? (schema.required as string[])
-    : undefined
+  const required = Array.isArray(schema.required) ? (schema.required as string[]) : undefined
 
   const constraints = extractConstraints(schema)
 

@@ -23,9 +23,7 @@ export async function loadSpec(input: string): Promise<LoadResult> {
   if (isSwaggerUiPage(initial.content)) {
     const specUrl = extractSpecUrl(initial.content, input)
     if (!specUrl) {
-      throw new SpecLoadError(
-        `Detected Swagger UI page at ${input} but could not extract spec URL`,
-      )
+      throw new SpecLoadError(`Detected Swagger UI page at ${input} but could not extract spec URL`)
     }
     const result = await loadFromUrl(specUrl)
     return { ...result, resolvedUrl: specUrl }

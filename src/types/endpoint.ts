@@ -2,15 +2,7 @@ import type { ParameterInfo } from './parameter.js'
 import type { RequestBodyInfo } from './request-body.js'
 import type { ResponseInfo } from './response.js'
 
-export type HttpMethod =
-  | 'get'
-  | 'post'
-  | 'put'
-  | 'delete'
-  | 'patch'
-  | 'options'
-  | 'head'
-  | 'trace'
+export type HttpMethod = 'get' | 'post' | 'put' | 'delete' | 'patch' | 'options' | 'head' | 'trace'
 
 export interface SecurityRequirement {
   readonly name: string

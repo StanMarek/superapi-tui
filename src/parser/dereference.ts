@@ -2,9 +2,7 @@ import { dereference } from '@scalar/openapi-parser'
 import { SpecParseError } from '@/types/index.js'
 import { parseYamlOrJson } from '@/utils/index.js'
 
-export function dereferenceSpec(
-  content: string,
-): Record<string, unknown> {
+export function dereferenceSpec(content: string): Record<string, unknown> {
   try {
     const doc = parseYamlOrJson(content)
     const result = dereference(doc)

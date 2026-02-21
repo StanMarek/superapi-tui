@@ -21,9 +21,10 @@ function transformParameter(raw: RawParam): ParameterInfo {
     required: raw.required === true,
     description: typeof raw.description === 'string' ? raw.description : undefined,
     deprecated: raw.deprecated === true,
-    schema: raw.schema && typeof raw.schema === 'object'
-      ? transformSchema(raw.schema as RawSchema)
-      : undefined,
+    schema:
+      raw.schema && typeof raw.schema === 'object'
+        ? transformSchema(raw.schema as RawSchema)
+        : undefined,
     example: raw.example,
     style: typeof raw.style === 'string' ? raw.style : undefined,
     explode: typeof raw.explode === 'boolean' ? raw.explode : undefined,
@@ -38,9 +39,10 @@ function transformMediaTypes(
     const raw = value as Record<string, unknown> | null
     return {
       mediaType,
-      schema: raw?.schema && typeof raw.schema === 'object'
-        ? transformSchema(raw.schema as RawSchema)
-        : undefined,
+      schema:
+        raw?.schema && typeof raw.schema === 'object'
+          ? transformSchema(raw.schema as RawSchema)
+          : undefined,
       example: raw?.example,
     }
   })
@@ -65,9 +67,10 @@ function transformResponseHeaders(
     return {
       name,
       description: typeof raw?.description === 'string' ? raw.description : undefined,
-      schema: raw?.schema && typeof raw.schema === 'object'
-        ? transformSchema(raw.schema as RawSchema)
-        : undefined,
+      schema:
+        raw?.schema && typeof raw.schema === 'object'
+          ? transformSchema(raw.schema as RawSchema)
+          : undefined,
       required: raw?.required === true,
     }
   })
@@ -88,9 +91,7 @@ function transformResponses(
   })
 }
 
-function transformSecurity(
-  security: unknown,
-): readonly SecurityRequirement[] | undefined {
+function transformSecurity(security: unknown): readonly SecurityRequirement[] | undefined {
   if (!Array.isArray(security)) return undefined
   return security.flatMap((entry) => {
     if (!entry || typeof entry !== 'object') return []
@@ -132,9 +133,7 @@ export function transformEndpoint(
   operation: RawOperation,
   pathParameters?: RawParam[],
 ): Endpoint {
-  const tags = Array.isArray(operation.tags)
-    ? operation.tags.map(String)
-    : []
+  const tags = Array.isArray(operation.tags) ? operation.tags.map(String) : []
 
   return {
     id: `${method}:${path}`,
@@ -145,10 +144,7 @@ export function transformEndpoint(
     operationId: typeof operation.operationId === 'string' ? operation.operationId : undefined,
     tags,
     deprecated: operation.deprecated === true,
-    parameters: mergeParameters(
-      pathParameters,
-      operation.parameters as RawParam[] | undefined,
-    ),
+    parameters: mergeParameters(pathParameters, operation.parameters as RawParam[] | undefined),
     requestBody: transformRequestBody(operation.requestBody),
     responses: transformResponses(operation.responses as Record<string, unknown> | undefined),
     security: transformSecurity(operation.security),

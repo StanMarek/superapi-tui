@@ -53,12 +53,8 @@ function extractServers(doc: RawDoc): readonly ServerInfo[] {
       for (const [name, variable] of Object.entries(rawVars)) {
         variables.set(name, {
           defaultValue: String(variable.default ?? ''),
-          enumValues: Array.isArray(variable.enum)
-            ? variable.enum.map(String)
-            : undefined,
-          description: typeof variable.description === 'string'
-            ? variable.description
-            : undefined,
+          enumValues: Array.isArray(variable.enum) ? variable.enum.map(String) : undefined,
+          description: typeof variable.description === 'string' ? variable.description : undefined,
         })
       }
     }
@@ -157,9 +153,12 @@ function groupByTags(
     for (const tag of specTags) {
       if (tag && typeof tag === 'object') {
         const name = String((tag as Record<string, unknown>).name ?? '')
-        tagMeta.set(name, typeof (tag as Record<string, unknown>).description === 'string'
-          ? (tag as Record<string, unknown>).description as string
-          : undefined)
+        tagMeta.set(
+          name,
+          typeof (tag as Record<string, unknown>).description === 'string'
+            ? ((tag as Record<string, unknown>).description as string)
+            : undefined,
+        )
         tagOrder.push(name)
       }
     }
