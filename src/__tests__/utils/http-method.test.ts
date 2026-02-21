@@ -27,6 +27,6 @@ describe('METHOD_COLORS', () => {
     expect(METHOD_COLORS.post).toBe('blue')
     expect(METHOD_COLORS.delete).toBe('red')
     expect(METHOD_COLORS.patch).toBe('cyan')
-    expect(METHOD_COLORS.put).toBe('yellow')
+    expect(METHOD_COLORS.put).toBe('orange')
   })
 })

@@ -11,7 +11,6 @@ const SPEC_URL_PATTERNS = [
   /SwaggerUIBundle\(\s*\{[^}]*url\s*:\s*["']([^"']+)["']/s,
   /SwaggerUIBundle\(\s*\{[^}]*url\s*:\s*`([^`]+)`/s,
   /spec-url\s*=\s*["']([^"']+)["']/,
-  /["']?(https?:\/\/[^"'\s]*(?:api-docs|swagger|openapi)[^"'\s]*)["']?/,
 ]
 
 export function extractSpecUrl(html: string, baseUrl: string): string | null {

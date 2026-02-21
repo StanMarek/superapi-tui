@@ -8,12 +8,7 @@ export function detectInputType(input: string): InputType {
 export function detectSpecFormat(content: string): SpecFormat {
   const trimmed = content.trim()
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    try {
-      JSON.parse(trimmed)
-      return 'json'
-    } catch {
-      // Fall through
-    }
+    return 'json'
   }
   return 'yaml'
 }

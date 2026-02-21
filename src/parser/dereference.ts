@@ -12,6 +12,10 @@ export function dereferenceSpec(content: string): Record<string, unknown> {
     return result.schema as Record<string, unknown>
   } catch (error) {
     if (error instanceof SpecParseError) throw error
-    throw new SpecParseError('Failed to dereference spec', [], error)
+    throw new SpecParseError(
+      `Failed to dereference spec${error instanceof Error ? `: ${error.message}` : ''}`,
+      [],
+      error,
+    )
   }
 }

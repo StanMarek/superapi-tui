@@ -20,4 +20,12 @@ describe('parseYamlOrJson', () => {
   test('throws on completely invalid content', () => {
     expect(() => parseYamlOrJson('not valid {{{')).toThrow()
   })
+
+  test('throws JSON error for JSON-looking invalid content', () => {
+    expect(() => parseYamlOrJson('{ broken json')).toThrow(/Failed to parse JSON/)
+  })
+
+  test('throws for JSON arrays', () => {
+    expect(() => parseYamlOrJson('[1, 2, 3]')).toThrow(/JSON array/)
+  })
 })

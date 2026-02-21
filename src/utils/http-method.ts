@@ -20,7 +20,7 @@ export function isHttpMethod(value: string): value is HttpMethod {
 export const METHOD_COLORS: Record<HttpMethod, string> = {
   get: 'green',
   post: 'blue',
-  put: 'yellow',
+  put: 'orange',
   delete: 'red',
   patch: 'cyan',
   options: 'magenta',

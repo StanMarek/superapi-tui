@@ -18,7 +18,7 @@ function transformParameter(raw: RawParam): ParameterInfo {
   return {
     name: String(raw.name ?? ''),
     location: (raw.in as ParameterInfo['location']) ?? 'query',
-    required: raw.required === true,
+    required: raw.in === 'path' ? true : raw.required === true,
     description: typeof raw.description === 'string' ? raw.description : undefined,
     deprecated: raw.deprecated === true,
     schema:

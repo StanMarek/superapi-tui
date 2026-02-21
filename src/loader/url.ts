@@ -3,10 +3,14 @@ import { SpecLoadError } from '@/types/index.js'
 import { detectSpecFormat } from './detect.js'
 
 export async function loadFromUrl(url: string): Promise<LoadResult> {
+  const parsed = new URL(url)
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new SpecLoadError(`Unsupported protocol: ${parsed.protocol}`)
+  }
   try {
     const response = await fetch(url)
     if (!response.ok) {
-      throw new SpecLoadError(`HTTP ${response.status} fetching ${url}`)
+      throw new SpecLoadError(`HTTP ${response.status} (${response.statusText}) fetching ${url}`)
     }
     const content = await response.text()
     return {

@@ -1,9 +1,6 @@
 export class SpecLoadError extends Error {
-  constructor(
-    message: string,
-    public readonly cause?: unknown,
-  ) {
-    super(message)
+  constructor(message: string, cause?: unknown) {
+    super(message, cause !== undefined ? { cause } : undefined)
     this.name = 'SpecLoadError'
   }
 }
@@ -11,10 +8,12 @@ export class SpecLoadError extends Error {
 export class SpecParseError extends Error {
   constructor(
     message: string,
-    public readonly validationErrors: string[] = [],
-    public readonly cause?: unknown,
+    public readonly validationErrors: readonly string[] = [],
+    cause?: unknown,
   ) {
-    super(message)
+    const fullMessage =
+      validationErrors.length > 0 ? `${message}:\n  - ${validationErrors.join('\n  - ')}` : message
+    super(fullMessage, cause !== undefined ? { cause } : undefined)
     this.name = 'SpecParseError'
   }
 }

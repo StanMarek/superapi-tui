@@ -12,6 +12,10 @@ export async function validateSpec(content: string): Promise<void> {
     }
   } catch (error) {
     if (error instanceof SpecParseError) throw error
-    throw new SpecParseError('Failed to validate spec', [], error)
+    throw new SpecParseError(
+      `Failed to validate spec${error instanceof Error ? `: ${error.message}` : ''}`,
+      [],
+      error,
+    )
   }
 }

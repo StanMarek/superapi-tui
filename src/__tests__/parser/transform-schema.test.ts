@@ -131,4 +131,20 @@ describe('transformSchema', () => {
     expect(result.example).toBe('hello')
     expect(result.defaultValue).toBe('world')
   })
+
+  test('handles shared schema objects without false circular detection', () => {
+    // Simulates post-dereference state: same object used in multiple places
+    const sharedSchema = { type: 'string', description: 'shared' }
+    const result = transformSchema({
+      type: 'object',
+      properties: {
+        field1: sharedSchema,
+        field2: sharedSchema,
+      },
+    })
+    expect(result.properties?.get('field1')?.type).toBe('string')
+    expect(result.properties?.get('field2')?.type).toBe('string')
+    // Both should be fully resolved, not marked as circular
+    expect(result.properties?.get('field2')?.displayType).toBe('string')
+  })
 })

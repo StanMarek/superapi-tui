@@ -15,7 +15,7 @@ export interface ServerInfo {
 
 export interface SecuritySchemeInfo {
   readonly name: string
-  readonly type: string
+  readonly type: 'apiKey' | 'http' | 'oauth2' | 'openIdConnect'
   readonly scheme?: string
   readonly in?: 'query' | 'header' | 'cookie'
   readonly paramName?: string

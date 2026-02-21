@@ -74,7 +74,7 @@ function extractSecuritySchemes(doc: RawDoc): readonly SecuritySchemeInfo[] {
 
   return Object.entries(schemes).map(([name, scheme]) => ({
     name,
-    type: String(scheme.type ?? ''),
+    type: String(scheme.type ?? '') as SecuritySchemeInfo['type'],
     scheme: typeof scheme.scheme === 'string' ? scheme.scheme : undefined,
     in: scheme.in as SecuritySchemeInfo['in'],
     paramName: typeof scheme.name === 'string' ? scheme.name : undefined,

@@ -32,4 +32,8 @@ describe('resolveUrl', () => {
     const result = resolveUrl('/v3/api-docs', 'https://example.com/swagger-ui/index.html')
     expect(result).toBe('https://example.com/v3/api-docs')
   })
+
+  test('throws descriptive error on malformed URLs', () => {
+    expect(() => resolveUrl('::invalid', '::also-invalid')).toThrow(/Cannot resolve URL/)
+  })
 })

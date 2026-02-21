@@ -34,4 +34,9 @@ describe('loadFromUrl', () => {
 
     await expect(loadFromUrl('https://example.com/fail')).rejects.toBeInstanceOf(SpecLoadError)
   })
+
+  test('rejects non-http/https protocols', async () => {
+    await expect(loadFromUrl('file:///etc/passwd')).rejects.toThrow(/Unsupported protocol/)
+    await expect(loadFromUrl('ftp://example.com/spec')).rejects.toThrow(/Unsupported protocol/)
+  })
 })

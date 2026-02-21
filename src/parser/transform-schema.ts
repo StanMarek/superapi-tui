@@ -91,10 +91,10 @@ function computeDisplayType(info: {
 export function transformSchema(
   schema: RawSchema,
   refName?: string,
-  seen: WeakSet<object> = new WeakSet(),
+  ancestors: WeakSet<object> = new WeakSet(),
 ): SchemaInfo {
-  // Circular reference detection
-  if (seen.has(schema)) {
+  // Circular reference detection — track current recursion path, not global visitation
+  if (ancestors.has(schema)) {
     return {
       type: 'unknown',
       nullable: false,
@@ -103,10 +103,7 @@ export function transformSchema(
       displayType: '[circular]',
     }
   }
-  seen.add(schema)
-
-  const { type, nullable: typeNullable } = resolveType(schema.type)
-  const nullable = typeNullable || schema.nullable === true
+  ancestors.add(schema)
 
   // Transform properties
   let properties: ReadonlyMap<string, SchemaInfo> | undefined
@@ -114,7 +111,7 @@ export function transformSchema(
     const props = new Map<string, SchemaInfo>()
     for (const [key, value] of Object.entries(schema.properties as Record<string, unknown>)) {
       if (value && typeof value === 'object') {
-        props.set(key, transformSchema(value as RawSchema, undefined, seen))
+        props.set(key, transformSchema(value as RawSchema, undefined, ancestors))
       }
     }
     properties = props
@@ -123,7 +120,7 @@ export function transformSchema(
   // Transform items
   let items: SchemaInfo | undefined
   if (schema.items && typeof schema.items === 'object') {
-    items = transformSchema(schema.items as RawSchema, undefined, seen)
+    items = transformSchema(schema.items as RawSchema, undefined, ancestors)
   }
 
   // Transform additionalProperties
@@ -135,15 +132,18 @@ export function transformSchema(
       additionalProperties = transformSchema(
         schema.additionalProperties as RawSchema,
         undefined,
-        seen,
+        ancestors,
       )
     }
   }
 
   // Transform composition
-  const allOf = transformComposition(schema.allOf, seen)
-  const oneOf = transformComposition(schema.oneOf, seen)
-  const anyOf = transformComposition(schema.anyOf, seen)
+  const allOf = transformComposition(schema.allOf, ancestors)
+  const oneOf = transformComposition(schema.oneOf, ancestors)
+  const anyOf = transformComposition(schema.anyOf, ancestors)
+
+  const { type, nullable: typeNullable } = resolveType(schema.type)
+  const nullable = typeNullable || schema.nullable === true
 
   // Extract enum
   const enumValues = Array.isArray(schema.enum) ? schema.enum.map((v) => String(v)) : undefined
@@ -163,6 +163,11 @@ export function transformSchema(
   }
 
   const displayType = computeDisplayType(partial)
+
+  // Remove from ancestors after processing — allows same object to appear
+  // in sibling branches (shared schemas after dereferencing) without false
+  // circular detection
+  ancestors.delete(schema)
 
   return {
     type,
@@ -189,10 +194,10 @@ export function transformSchema(
 
 function transformComposition(
   schemas: unknown,
-  seen: WeakSet<object>,
+  ancestors: WeakSet<object>,
 ): readonly SchemaInfo[] | undefined {
   if (!Array.isArray(schemas)) return undefined
   return schemas
     .filter((s): s is RawSchema => s !== null && typeof s === 'object')
-    .map((s) => transformSchema(s, undefined, seen))
+    .map((s) => transformSchema(s, undefined, ancestors))
 }

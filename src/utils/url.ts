@@ -4,6 +4,9 @@ export function isUrl(input: string): boolean {
 
 export function resolveUrl(relative: string, base: string): string {
   if (isUrl(relative)) return relative
-  const baseUrl = new URL(base)
-  return new URL(relative, baseUrl).toString()
+  try {
+    return new URL(relative, new URL(base)).toString()
+  } catch {
+    throw new Error(`Cannot resolve URL "${relative}" against base "${base}"`)
+  }
 }
