@@ -564,15 +564,15 @@ describe('useRequestState - auth state', () => {
     expect(lastFrame()).toContain('token:persist-token')
   })
 
-  test('cycleAuthOption resets credential fields', async () => {
-    function ResetHarness() {
+  test('cycleAuthOption preserves credential fields across methods', async () => {
+    function PreserveHarness() {
       const state = useRequestState(null, [])
       const [phase, setPhase] = useState(0)
 
       useEffect(() => {
         if (phase === 0) {
           const timer = setTimeout(() => {
-            state.auth.setAuthField('token', 'should-be-cleared')
+            state.auth.setAuthField('token', 'my-jwt')
             setPhase(1)
           }, 10)
           return () => clearTimeout(timer)
@@ -582,9 +582,21 @@ describe('useRequestState - auth state', () => {
       useEffect(() => {
         if (phase === 1) {
           const timer = setTimeout(() => {
-            // Cycle from bearer to apiKey
+            // Cycle bearer → apiKey
             state.auth.cycleAuthOption()
             setPhase(2)
+          }, 10)
+          return () => clearTimeout(timer)
+        }
+      }, [phase])
+
+      useEffect(() => {
+        if (phase === 2) {
+          const timer = setTimeout(() => {
+            // Cycle apiKey → basic → bearer (cycle twice to return)
+            state.auth.cycleAuthOption()
+            state.auth.cycleAuthOption()
+            setPhase(3)
           }, 10)
           return () => clearTimeout(timer)
         }
@@ -594,15 +606,17 @@ describe('useRequestState - auth state', () => {
       return (
         <Box flexDirection="column">
           <Text>credMethod:{creds.method}</Text>
+          <Text>token:{creds.method === 'bearer' ? creds.token : ''}</Text>
           <Text>phase:{phase}</Text>
         </Box>
       )
     }
 
-    const { lastFrame } = render(<ResetHarness />)
-    await delay(200)
-    // Should have cycled to apiKey
-    expect(lastFrame()).toContain('credMethod:apiKey')
+    const { lastFrame } = render(<PreserveHarness />)
+    await delay(300)
+    // Should be back on bearer with preserved token
+    expect(lastFrame()).toContain('credMethod:bearer')
+    expect(lastFrame()).toContain('token:my-jwt')
   })
 
   test('send injects bearer auth header', async () => {

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { Box, Text, useInput } from 'ink'
 import { Spinner } from '@inkjs/ui'
-import type { Endpoint, ServerInfo, SecuritySchemeInfo, ResponseTab } from '@/types/index.js'
+import type { Endpoint, ServerInfo, SecuritySchemeInfo, AuthFieldKey, ResponseTab } from '@/types/index.js'
 import { METHOD_COLORS } from '@/utils/http-method.js'
 import { useRequestState } from '@/hooks/useRequestState.js'
 import { useScrollableList } from '@/hooks/useScrollableList.js'
@@ -19,7 +19,7 @@ type Row =
   | { readonly type: 'server'; readonly label: string }
   | { readonly type: 'auth-toggle'; readonly label: string }
   | { readonly type: 'auth-type'; readonly label: string }
-  | { readonly type: 'auth-field'; readonly label: string; readonly fieldKey: string }
+  | { readonly type: 'auth-field'; readonly label: string; readonly fieldKey: AuthFieldKey }
   | { readonly type: 'param'; readonly label: string; readonly paramKey: string }
   | { readonly type: 'body-editor'; readonly label: string }
   | { readonly type: 'send'; readonly label: string }
@@ -120,7 +120,7 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
   const state = useRequestState(endpoint, securitySchemes)
   const [editingParam, setEditingParam] = useState<string | null>(null)
   const [editingBody, setEditingBody] = useState(false)
-  const [editingAuthField, setEditingAuthField] = useState<string | null>(null)
+  const [editingAuthField, setEditingAuthField] = useState<AuthFieldKey | null>(null)
 
   // Ref-backed edit buffer: ref is always current, state is debounced for display.
   // Prevents render storm when terminals send pasted text character-by-character.
@@ -340,7 +340,7 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
     { isActive: isFocused && endpoint !== null },
   )
 
-  function getAuthFieldValue(fieldKey: string): string {
+  function getAuthFieldValue(fieldKey: AuthFieldKey): string {
     const creds = state.auth.credentials
     switch (fieldKey) {
       case 'token':
@@ -394,10 +394,15 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
 
         if (row.type === 'auth-toggle') {
           return (
-            <Box key="auth-toggle">
+            <Box key="auth-toggle" flexDirection="column">
               <Text inverse={isSelected} dimColor={!isFocused}>
                 {state.auth.authExpanded ? '[-]' : '[+]'} Auth: {selectedOption?.label ?? 'None'} (a)
               </Text>
+              {state.auth.unsupportedSchemes.length > 0 && (
+                <Text dimColor color="yellow">
+                  Unsupported: {state.auth.unsupportedSchemes.join(', ')}
+                </Text>
+              )}
             </Box>
           )
         }

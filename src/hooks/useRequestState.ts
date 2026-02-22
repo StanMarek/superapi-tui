@@ -5,8 +5,8 @@ import type {
   ResponseTab,
   HttpResponse,
   SecuritySchemeInfo,
-  AuthOption,
   AuthCredentials,
+  AuthFieldKey,
   AuthState,
 } from '@/types/index.js'
 import { resolveServerUrl, buildRequestUrl, sendRequest, deriveAuthOptions, applyAuth } from '@/http/index.js'
@@ -53,13 +53,15 @@ export function useRequestState(
   const [authUsername, setAuthUsername] = useState('')
   const [authPassword, setAuthPassword] = useState('')
 
-  const availableOptions = useMemo(
+  const authResult = useMemo(
     () => deriveAuthOptions(securitySchemes),
     [securitySchemes],
   )
+  const availableOptions = authResult.options
+  const unsupportedSchemes = authResult.unsupportedSchemes
 
   // Build credentials from current selection + field values
-  const selectedOption: AuthOption | undefined = availableOptions[selectedOptionIndex % availableOptions.length]
+  const selectedOption = availableOptions[selectedOptionIndex % availableOptions.length] as typeof availableOptions[number] | undefined
 
   const credentials: AuthCredentials = useMemo(() => {
     if (!selectedOption) return { method: 'none' }
@@ -71,13 +73,15 @@ export function useRequestState(
         return {
           method: 'apiKey',
           key: authKey,
-          paramName: selectedOption.apiKeyParamName ?? 'X-API-Key',
-          location: selectedOption.apiKeyIn ?? 'header',
+          paramName: selectedOption.apiKeyParamName,
+          location: selectedOption.apiKeyIn,
         }
       case 'basic':
         return { method: 'basic', username: authUsername, password: authPassword }
-      default:
-        return { method: 'none' }
+      default: {
+        const _exhaustive: never = selectedOption
+        throw new Error(`Unsupported auth method: ${(_exhaustive as { method: string }).method}`)
+      }
     }
   }, [selectedOption, authToken, authKey, authUsername, authPassword])
 
@@ -137,14 +141,9 @@ export function useRequestState(
 
   const cycleAuthOption = useCallback(() => {
     setSelectedOptionIndex(prev => (prev + 1) % availableOptions.length)
-    // Reset credential fields
-    setAuthToken('')
-    setAuthKey('')
-    setAuthUsername('')
-    setAuthPassword('')
   }, [availableOptions.length])
 
-  const setAuthField = useCallback((field: string, value: string) => {
+  const setAuthField = useCallback((field: AuthFieldKey, value: string) => {
     switch (field) {
       case 'token':
         setAuthToken(value)
@@ -158,6 +157,10 @@ export function useRequestState(
       case 'password':
         setAuthPassword(value)
         break
+      default: {
+        const _exhaustive: never = field
+        throw new Error(`Unknown auth field: ${_exhaustive}`)
+      }
     }
   }, [])
 
@@ -217,7 +220,7 @@ export function useRequestState(
         }
       }
 
-      // Apply auth
+      // Apply auth — intentionally overrides user-supplied header params with same name
       const authResult = applyAuth(credentials)
       for (const [key, value] of authResult.headers) {
         headers.set(key, value)
@@ -278,11 +281,12 @@ export function useRequestState(
     authExpanded,
     toggleAuth,
     availableOptions,
+    unsupportedSchemes,
     selectedOptionIndex,
     cycleAuthOption,
     credentials,
     setAuthField,
-  }), [authExpanded, toggleAuth, availableOptions, selectedOptionIndex, cycleAuthOption, credentials, setAuthField])
+  }), [authExpanded, toggleAuth, availableOptions, unsupportedSchemes, selectedOptionIndex, cycleAuthOption, credentials, setAuthField])
 
   return {
     selectedServerIndex,

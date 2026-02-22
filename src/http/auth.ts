@@ -6,8 +6,14 @@ const FALLBACK_OPTIONS: readonly AuthOption[] = [
   { method: 'basic', label: 'Basic Auth', schemeName: 'basic' },
 ]
 
-export function deriveAuthOptions(schemes: readonly SecuritySchemeInfo[]): readonly AuthOption[] {
+export interface DeriveAuthResult {
+  readonly options: readonly AuthOption[]
+  readonly unsupportedSchemes: readonly string[]
+}
+
+export function deriveAuthOptions(schemes: readonly SecuritySchemeInfo[]): DeriveAuthResult {
   const options: AuthOption[] = []
+  const unsupportedSchemes: string[] = []
 
   for (const scheme of schemes) {
     if (scheme.type === 'http' && scheme.scheme === 'bearer') {
@@ -30,10 +36,15 @@ export function deriveAuthOptions(schemes: readonly SecuritySchemeInfo[]): reado
         apiKeyIn: scheme.in,
         apiKeyParamName: scheme.paramName ?? scheme.name,
       })
+    } else {
+      unsupportedSchemes.push(`${scheme.name} (${scheme.type})`)
     }
   }
 
-  return options.length > 0 ? options : FALLBACK_OPTIONS
+  return {
+    options: options.length > 0 ? options : FALLBACK_OPTIONS,
+    unsupportedSchemes,
+  }
 }
 
 export interface ApplyAuthResult {
@@ -46,20 +57,32 @@ export function applyAuth(credentials: AuthCredentials): ApplyAuthResult {
   const queryParams = new Map<string, string>()
 
   switch (credentials.method) {
+    case 'none':
+      break
     case 'bearer':
-      headers.set('Authorization', `Bearer ${credentials.token}`)
+      if (credentials.token) {
+        headers.set('Authorization', `Bearer ${credentials.token}`)
+      }
       break
     case 'apiKey':
-      if (credentials.location === 'header') {
-        headers.set(credentials.paramName, credentials.key)
-      } else {
-        queryParams.set(credentials.paramName, credentials.key)
+      if (credentials.key) {
+        if (credentials.location === 'header') {
+          headers.set(credentials.paramName, credentials.key)
+        } else {
+          queryParams.set(credentials.paramName, credentials.key)
+        }
       }
       break
     case 'basic': {
-      const encoded = Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')
-      headers.set('Authorization', `Basic ${encoded}`)
+      if (credentials.username || credentials.password) {
+        const encoded = Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')
+        headers.set('Authorization', `Basic ${encoded}`)
+      }
       break
+    }
+    default: {
+      const _exhaustive: never = credentials
+      throw new Error(`Unsupported auth method: ${(_exhaustive as AuthCredentials).method}`)
     }
   }
 
