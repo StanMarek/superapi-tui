@@ -60,7 +60,7 @@ export function EndpointDetail({ endpoint, isFocused, componentSchemas }: Props)
   useEffect(() => {
     schemaNav.reset()
     setCollapsedSections(new Set())
-  }, [endpoint])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [endpoint])
 
   const toggleSection = (sectionId: SectionId) => {
     setCollapsedSections(prev => {
