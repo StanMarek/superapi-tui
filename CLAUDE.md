@@ -81,6 +81,15 @@ CLI entry point compiles to `./dist/cli.js`. The `bin` field in package.json map
 - **Parser:** `src/parser/` — `parseSpec(content)` validates with @scalar/openapi-parser, resolves $refs, transforms to `ParsedSpec`
 - Pipeline: `loadSpec(input) → parseSpec(result.content) → ParsedSpec`
 
+### TUI Components
+
+- **Navigation:** `src/hooks/useNavigation.ts` — shared hook for panel focus (Tab/Shift+Tab), endpoint selection, text capture guard
+- **Panel types:** `PanelId = 'endpoints' | 'detail' | 'request'` — panels get `isFocused` prop, borders cyan when focused
+- **EndpointList:** Flat `ListRow` discriminated union model for cursor navigation, collapsible tag groups, `/` filter mode
+- **SpecLoader:** Async wrapper component handling loading/error/loaded states with Spinner from `@inkjs/ui`
+- **Components:** `src/components/` with barrel export from `index.ts`
+- **Hooks:** `src/hooks/` with barrel export from `index.ts`
+
 ### Data Flow
 
 ```
@@ -113,6 +122,13 @@ Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), 
 - Test fixtures live in `src/__tests__/fixtures/`
 - Path alias `@/*` → `src/*` works in tests via tsconfig
 
+### Ink Component Testing
+
+- Use `ink-testing-library` — `render()` returns `{ lastFrame, stdin }`
+- Ink renders are async in Bun — use `await delay(50)` after `stdin.write()` before asserting
+- `lastFrame()` returns current terminal output as string for snapshot assertions
+- `useInput` tests: write raw chars (`stdin.write('j')`) or escape sequences (`stdin.write('\t')`)
+
 ## Dependencies — Gotchas
 
 - `@scalar/openapi-parser` requires `ajv` as peer dep — install both
@@ -127,6 +143,9 @@ Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), 
 - No silent fallbacks in parsers — fail explicitly with descriptive errors
 - SSRF protection: validate protocol (http/https only) before `fetch()`
 - Circular reference detection: use path-scoped ancestor tracking (`WeakSet` with add/delete), not global visitation
+- React hooks in Ink: all `useEffect`/`useInput` calls must precede conditional returns — Ink components often have multi-phase render patterns
+- Text capture guard: components with text input modes (filter, editor) must notify parent via callback to suppress global keybindings (`q` quit, etc.)
+- Composite React keys for multi-tagged items: `${tag}-${endpoint.id}` to prevent duplicates
 
 ## Design Decisions
 
