@@ -36,6 +36,7 @@ export default function App({ spec }: Props) {
         <EndpointDetail
           endpoint={selectedEndpoint}
           isFocused={focusedPanel === 'detail'}
+          componentSchemas={spec.componentSchemas}
         />
       </Box>
       <Box
