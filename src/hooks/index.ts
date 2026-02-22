@@ -1,2 +1,6 @@
 export { useNavigation } from './useNavigation.js'
 export type { PanelId, NavigationState } from './useNavigation.js'
+export { useScrollableList } from './useScrollableList.js'
+export type { ScrollableListState } from './useScrollableList.js'
+export { useSchemaNavigation } from './useSchemaNavigation.js'
+export type { SchemaNavigationState, SchemaStackEntry } from './useSchemaNavigation.js'
