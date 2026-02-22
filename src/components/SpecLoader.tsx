@@ -24,13 +24,14 @@ export function SpecLoader({ input }: Props) {
 
   useEffect(() => {
     if (!input) return
+    const specInput = input
 
     let cancelled = false
 
     async function load() {
       try {
-        setState({ phase: 'loading', message: `Loading spec from ${input}...` })
-        const result = await loadSpec(input!)
+        setState({ phase: 'loading', message: `Loading spec from ${specInput}...` })
+        const result = await loadSpec(specInput)
         if (cancelled) return
 
         setState({ phase: 'loading', message: 'Parsing spec...' })
@@ -41,6 +42,9 @@ export function SpecLoader({ input }: Props) {
       } catch (error) {
         if (cancelled) return
         const message = error instanceof Error ? error.message : String(error)
+        if (error instanceof Error && error.cause) {
+          console.error(error)
+        }
         setState({ phase: 'error', message })
       }
     }
@@ -55,9 +59,19 @@ export function SpecLoader({ input }: Props) {
   useEffect(() => {
     if (state.phase !== 'error') return
     const timer = setTimeout(() => {
+      console.error(`Error: ${state.message}`)
       process.exitCode = 1
       exit()
     }, 2000)
+    return () => clearTimeout(timer)
+  }, [state, exit])
+
+  // Exit after rendering usage screen
+  useEffect(() => {
+    if (state.phase !== 'no-input') return
+    const timer = setTimeout(() => {
+      exit()
+    }, 100)
     return () => clearTimeout(timer)
   }, [state.phase, exit])
 

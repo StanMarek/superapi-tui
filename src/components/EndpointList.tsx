@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { Box, Text, useInput } from 'ink'
 import type { Endpoint, TagGroup } from '@/types/index.js'
 import { METHOD_COLORS } from '@/utils/http-method.js'
@@ -62,11 +62,6 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
   const [filterText, setFilterText] = useState('')
   const [isFiltering, setIsFiltering] = useState(false)
 
-  // Notify parent when text capture mode changes (prevents q from quitting during filter)
-  useEffect(() => {
-    onTextCaptureChange?.(isFiltering)
-  }, [isFiltering, onTextCaptureChange])
-
   const rows = useMemo(() => {
     if (isFiltering) {
       return buildFilteredRows(tagGroups, filterText)
@@ -74,12 +69,9 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
     return buildRows(tagGroups, collapsedTags)
   }, [tagGroups, collapsedTags, isFiltering, filterText])
 
-  const clampCursor = useCallback(
-    (index: number) => Math.max(0, Math.min(index, rows.length - 1)),
-    [rows.length],
-  )
+  const clampCursor = (index: number) => Math.max(0, Math.min(index, rows.length - 1))
 
-  const toggleCollapse = useCallback((tag: string) => {
+  const toggleCollapse = (tag: string) => {
     setCollapsedTags(prev => {
       const next = new Set(prev)
       if (next.has(tag)) {
@@ -89,25 +81,25 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
       }
       return next
     })
-  }, [])
+  }
 
-  const collapseTag = useCallback((tag: string) => {
+  const collapseTag = (tag: string) => {
     setCollapsedTags(prev => {
       if (prev.has(tag)) return prev
       const next = new Set(prev)
       next.add(tag)
       return next
     })
-  }, [])
+  }
 
-  const expandTag = useCallback((tag: string) => {
+  const expandTag = (tag: string) => {
     setCollapsedTags(prev => {
       if (!prev.has(tag)) return prev
       const next = new Set(prev)
       next.delete(tag)
       return next
     })
-  }, [])
+  }
 
   useInput(
     (input, key) => {
@@ -117,10 +109,12 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
           setIsFiltering(false)
           setFilterText('')
           setCursorIndex(0)
+          onTextCaptureChange?.(false)
           return
         }
         if (key.return) {
           setIsFiltering(false)
+          onTextCaptureChange?.(false)
           return
         }
         if (key.backspace || key.delete) {
@@ -141,6 +135,7 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
         setIsFiltering(true)
         setFilterText('')
         setCursorIndex(0)
+        onTextCaptureChange?.(true)
         return
       }
 
