@@ -71,6 +71,7 @@ CLI entry point compiles to `./dist/cli.js`. The `bin` field in package.json map
 - **Spec Parser** — Validates and structures OpenAPI v3.0/v3.1 data
 - **TUI Components** — Ink/React components for each panel
 - **HTTP Client** — Sends requests to endpoints using selected server + auth
+- **HTTP Module** — `src/http/` — `client.ts` (resolveServerUrl, buildRequestUrl, validateSsrf, sendRequest) + `template.ts` (generateBodyTemplate from schemas). Barrel export from `index.ts`
 - **Config Manager** — Reads/writes `~/.superapi-tui.json` (saved servers, auth presets, UI preferences)
 
 ### Data Layer
@@ -87,6 +88,7 @@ CLI entry point compiles to `./dist/cli.js`. The `bin` field in package.json map
 - **Panel types:** `PanelId = 'endpoints' | 'detail' | 'request'` — panels get `isFocused` prop, borders cyan when focused
 - **EndpointList:** Flat `ListRow` discriminated union model for cursor navigation, collapsible tag groups, `/` filter mode
 - **EndpointDetail:** Collapsible sections (Parameters, Request Body, Responses) with `sectionHeader`/`content` row model. Sub-components: `ParameterList`, `SchemaView` (recursive, self-managed cursor), `ResponseList`. Schema drill-down via `useSchemaNavigation` hook.
+- **RequestPanel:** Row model (`server` → `param` → `body-editor` → `send` → `response-tabs` → `response-content`). Discriminated union `Row` type. State managed by `useRequestState` hook. Inline param/body editing with text capture guard. Response viewer with Pretty/Raw/Headers tabs.
 - **SpecLoader:** Async wrapper component handling loading/error/loaded states with Spinner from `@inkjs/ui`
 - **Components:** `src/components/` with barrel export from `index.ts`
 - **Hooks:** `src/hooks/` with barrel export from `index.ts`
@@ -132,6 +134,12 @@ Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), 
 - Bun `mock().mock.lastCall` is typed `[] | undefined` — use `as unknown as [T1, T2]` to access args
 - Integration tests importing `App.tsx` may show "File not found" in parallel runs — run individually with `bun test <file>`
 
+### Hook Testing
+
+- Test hooks via harness components: render a component that calls the hook and displays state as text, then assert on `lastFrame()`
+- Trigger hook actions via `useEffect` + `setTimeout`, never as side effects during render
+- For multi-phase tests (set state then validate): use a phase state machine (`'set' | 'validate' | 'done'`) with separate `useEffect` per phase
+
 ## Dependencies — Gotchas
 
 - `@scalar/openapi-parser` requires `ajv` as peer dep — install both
@@ -150,6 +158,9 @@ Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), 
 - `react-hooks/exhaustive-deps` ESLint rule is NOT configured — don't add eslint-disable comments for it; don't add hook return objects to `useEffect` deps (they're new objects each render and cause infinite loops)
 - Text capture guard: components with text input modes (filter, editor) must notify parent via callback to suppress global keybindings (`q` quit, etc.)
 - Composite React keys for multi-tagged items: `${tag}-${endpoint.id}` to prevent duplicates
+- OpenAPI path/server variable regex: use `\{([^}]+)\}` not `\{(\w+)\}` — param names can contain hyphens and dots
+- Callbacks consuming React state: accept optional arg for the current value to avoid stale closures (e.g., `validateBody(text?: string)` uses `text ?? bodyText`)
+- Stale async response protection: use a `useRef` counter incremented on endpoint change; ignore responses where counter has moved on
 
 ## Design Decisions
 

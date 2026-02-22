@@ -226,10 +226,12 @@ describe('EndpointDetail Integration', () => {
     await delay(50)
 
     frame = lastFrame()!
-    // After collapsing Parameters, the "limit" parameter should be hidden
+    // After collapsing Parameters, the detail panel's expanded parameter info should be hidden
     // The collapsed indicator should appear
     expect(frame).toContain('\u25b6') // collapsed arrow
-    expect(frame).not.toContain('limit')
+    // The detail panel's ParameterList renders "Query Parameters" as a group header —
+    // this should disappear when collapsed (request panel uses "query:limit" format instead)
+    expect(frame).not.toContain('Query Parameters')
   })
 
   it('switching endpoint selection updates the detail panel', async () => {

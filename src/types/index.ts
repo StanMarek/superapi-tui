@@ -12,3 +12,5 @@ export type {
   ParsedSpec,
 } from './spec.js'
 export type { InputType, SpecFormat, LoadResult } from './loader.js'
+export type { ResponseTab, RequestOptions, HttpResponse } from './http.js'
+export { HttpRequestError } from './http.js'
