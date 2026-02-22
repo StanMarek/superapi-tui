@@ -86,6 +86,7 @@ CLI entry point compiles to `./dist/cli.js`. The `bin` field in package.json map
 - **Navigation:** `src/hooks/useNavigation.ts` — shared hook for panel focus (Tab/Shift+Tab), endpoint selection, text capture guard
 - **Panel types:** `PanelId = 'endpoints' | 'detail' | 'request'` — panels get `isFocused` prop, borders cyan when focused
 - **EndpointList:** Flat `ListRow` discriminated union model for cursor navigation, collapsible tag groups, `/` filter mode
+- **EndpointDetail:** Collapsible sections (Parameters, Request Body, Responses) with `sectionHeader`/`content` row model. Sub-components: `ParameterList`, `SchemaView` (recursive, self-managed cursor), `ResponseList`. Schema drill-down via `useSchemaNavigation` hook.
 - **SpecLoader:** Async wrapper component handling loading/error/loaded states with Spinner from `@inkjs/ui`
 - **Components:** `src/components/` with barrel export from `index.ts`
 - **Hooks:** `src/hooks/` with barrel export from `index.ts`
@@ -128,6 +129,8 @@ Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), 
 - Ink renders are async in Bun — use `await delay(50)` after `stdin.write()` before asserting
 - `lastFrame()` returns current terminal output as string for snapshot assertions
 - `useInput` tests: write raw chars (`stdin.write('j')`) or escape sequences (`stdin.write('\t')`)
+- Bun `mock().mock.lastCall` is typed `[] | undefined` — use `as unknown as [T1, T2]` to access args
+- Integration tests importing `App.tsx` may show "File not found" in parallel runs — run individually with `bun test <file>`
 
 ## Dependencies — Gotchas
 
@@ -144,6 +147,7 @@ Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), 
 - SSRF protection: validate protocol (http/https only) before `fetch()`
 - Circular reference detection: use path-scoped ancestor tracking (`WeakSet` with add/delete), not global visitation
 - React hooks in Ink: all `useEffect`/`useInput` calls must precede conditional returns — Ink components often have multi-phase render patterns
+- `react-hooks/exhaustive-deps` ESLint rule is NOT configured — don't add eslint-disable comments for it; don't add hook return objects to `useEffect` deps (they're new objects each render and cause infinite loops)
 - Text capture guard: components with text input modes (filter, editor) must notify parent via callback to suppress global keybindings (`q` quit, etc.)
 - Composite React keys for multi-tagged items: `${tag}-${endpoint.id}` to prevent duplicates
 
