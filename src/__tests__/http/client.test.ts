@@ -69,6 +69,19 @@ describe('buildRequestUrl', () => {
 
     expect(result).toBe('https://api.example.com/search/hello%20world%2Ffoo')
   })
+
+  test('matches param names with hyphens and dots', () => {
+    const result = buildRequestUrl(
+      'https://api.example.com',
+      '/items/{item-id}/versions/{api.version}',
+      new Map([
+        ['item-id', '42'],
+        ['api.version', 'v2'],
+      ]),
+    )
+
+    expect(result).toBe('https://api.example.com/items/42/versions/v2')
+  })
 })
 
 describe('validateSsrf', () => {
@@ -96,6 +109,17 @@ describe('validateSsrf', () => {
   test('rejects non-http/https protocols', () => {
     expect(() => validateSsrf('ftp://example.com/file')).toThrow(HttpRequestError)
     expect(() => validateSsrf('file:///etc/passwd')).toThrow(HttpRequestError)
+  })
+
+  test('rejects malformed URLs with cause chain', () => {
+    try {
+      validateSsrf('not-a-url')
+      expect(true).toBe(false) // should not reach here
+    } catch (error) {
+      expect(error).toBeInstanceOf(HttpRequestError)
+      expect((error as HttpRequestError).message).toContain('Invalid URL')
+      expect((error as HttpRequestError).cause).toBeDefined()
+    }
   })
 })
 

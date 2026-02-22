@@ -14,22 +14,22 @@ interface Props {
   readonly onTextCaptureChange?: (active: boolean) => void
 }
 
-type RowType = 'server' | 'param' | 'body-editor' | 'send' | 'response-tabs' | 'response-content'
-
-interface Row {
-  readonly type: RowType
-  readonly label: string
-  readonly paramKey?: string
-}
+type Row =
+  | { readonly type: 'server'; readonly label: string }
+  | { readonly type: 'param'; readonly label: string; readonly paramKey: string }
+  | { readonly type: 'body-editor'; readonly label: string }
+  | { readonly type: 'send'; readonly label: string }
+  | { readonly type: 'response-tabs'; readonly label: string }
+  | { readonly type: 'response-content'; readonly label: string }
 
 const PRETTY_LINE_CAP = 40
 const RAW_CHAR_CAP = 2000
 
-const TAB_KEYS: Record<string, ResponseTab> = {
-  '1': 'pretty',
-  '2': 'raw',
-  '3': 'headers',
-}
+const TAB_KEYS = new Map<string, ResponseTab>([
+  ['1', 'pretty'],
+  ['2', 'raw'],
+  ['3', 'headers'],
+])
 
 function buildRows(endpoint: Endpoint): readonly Row[] {
   const rows: Row[] = []
@@ -60,7 +60,12 @@ function buildRows(endpoint: Endpoint): readonly Row[] {
   return rows
 }
 
-function formatPrettyResponse(body: string): readonly string[] {
+interface PrettyResult {
+  readonly lines: readonly string[]
+  readonly isJson: boolean
+}
+
+function formatPrettyResponse(body: string): PrettyResult {
   try {
     const parsed = JSON.parse(body)
     const pretty = JSON.stringify(parsed, null, 2)
@@ -68,11 +73,11 @@ function formatPrettyResponse(body: string): readonly string[] {
     if (lines.length > PRETTY_LINE_CAP) {
       const truncated = lines.slice(0, PRETTY_LINE_CAP)
       truncated.push(`... (${lines.length - PRETTY_LINE_CAP} more lines)`)
-      return truncated
+      return { lines: truncated, isJson: true }
     }
-    return lines
+    return { lines, isJson: true }
   } catch {
-    return [body]
+    return { lines: [body], isJson: false }
   }
 }
 
@@ -137,7 +142,7 @@ export function RequestPanel({ endpoint, isFocused, servers, onTextCaptureChange
       if (editingBody) {
         if (key.escape) {
           state.setBodyText(editBuffer)
-          state.validateBody()
+          state.validateBody(editBuffer)
           setEditingBody(false)
           return
         }
@@ -186,15 +191,16 @@ export function RequestPanel({ endpoint, isFocused, servers, onTextCaptureChange
       }
 
       // Response tab switching
-      if (input in TAB_KEYS) {
-        state.setActiveTab(TAB_KEYS[input])
+      const tab = TAB_KEYS.get(input)
+      if (tab !== undefined) {
+        state.setActiveTab(tab)
         return
       }
 
       // Enter: start editing param or trigger send
       if (key.return) {
         const row = rows[cursorIndex]
-        if (row?.type === 'param' && row.paramKey) {
+        if (row?.type === 'param') {
           setEditingParam(row.paramKey)
           setEditBuffer(state.paramValues.get(row.paramKey) ?? '')
           return
@@ -254,7 +260,7 @@ export function RequestPanel({ endpoint, isFocused, servers, onTextCaptureChange
           )
         }
 
-        if (row.type === 'param' && row.paramKey) {
+        if (row.type === 'param') {
           const isEditing = editingParam === row.paramKey
           const value = isEditing ? editBuffer : (state.paramValues.get(row.paramKey) ?? '')
           return (
@@ -349,14 +355,15 @@ export function RequestPanel({ endpoint, isFocused, servers, onTextCaptureChange
           const { response: res } = state
 
           if (state.activeTab === 'pretty') {
-            const lines = formatPrettyResponse(res.body)
+            const { lines, isJson } = formatPrettyResponse(res.body)
             return (
               <Box key="response" marginTop={1} flexDirection="column">
                 <Text bold>
                   {res.status} {res.statusText} ({res.durationMs}ms)
                 </Text>
+                {!isJson && <Text dimColor>(Response is not JSON)</Text>}
                 {lines.map((line, i) => (
-                  <Text key={i} color={colorForJsonLine(line)}>{line}</Text>
+                  <Text key={i} color={isJson ? colorForJsonLine(line) : undefined}>{line}</Text>
                 ))}
               </Box>
             )

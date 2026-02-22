@@ -34,10 +34,18 @@ function generateValue(schema: SchemaInfo, ancestors: Set<SchemaInfo>, depth: nu
     return generateValue(schema.anyOf[0], ancestors, depth)
   }
 
-  // allOf: merge first sub-schema properties into object result
+  // allOf: merge all sub-schema results
   if (schema.allOf && schema.allOf.length > 0) {
-    const first = schema.allOf[0]
-    return generateValue(first, ancestors, depth)
+    const merged: Record<string, unknown> = {}
+    let hasObjectResult = false
+    for (const sub of schema.allOf) {
+      const value = generateValue(sub, ancestors, depth)
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        Object.assign(merged, value as Record<string, unknown>)
+        hasObjectResult = true
+      }
+    }
+    return hasObjectResult ? merged : generateValue(schema.allOf[0], ancestors, depth)
   }
 
   switch (schema.type) {
@@ -78,5 +86,9 @@ function generateValue(schema: SchemaInfo, ancestors: Set<SchemaInfo>, depth: nu
 export function generateBodyTemplate(schema: SchemaInfo): string {
   const ancestors = new Set<SchemaInfo>()
   const value = generateValue(schema, ancestors, 0)
-  return JSON.stringify(value, null, 2)
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return '{}'
+  }
 }

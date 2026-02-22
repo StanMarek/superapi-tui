@@ -171,7 +171,7 @@ describe('generateBodyTemplate', () => {
     expect(current).toEqual({})
   })
 
-  test('allOf merges first sub-schema', () => {
+  test('allOf merges all sub-schemas', () => {
     const schema = makeSchema({
       type: 'object',
       displayType: 'object',
@@ -194,7 +194,32 @@ describe('generateBodyTemplate', () => {
       ],
     })
     const result = JSON.parse(generateBodyTemplate(schema))
-    expect(result).toEqual({ id: 0, name: '' })
+    expect(result).toEqual({ id: 0, name: '', email: '' })
+  })
+
+  test('anyOf uses first sub-schema', () => {
+    const schema = makeSchema({
+      type: 'object',
+      displayType: 'object',
+      anyOf: [
+        makeSchema({
+          type: 'object',
+          displayType: 'Cat',
+          properties: new Map<string, SchemaInfo>([
+            ['purrs', makeSchema({ type: 'boolean', displayType: 'boolean' })],
+          ]),
+        }),
+        makeSchema({
+          type: 'object',
+          displayType: 'Dog',
+          properties: new Map<string, SchemaInfo>([
+            ['barks', makeSchema({ type: 'boolean', displayType: 'boolean' })],
+          ]),
+        }),
+      ],
+    })
+    const result = JSON.parse(generateBodyTemplate(schema))
+    expect(result).toEqual({ purrs: false })
   })
 
   test('oneOf uses first sub-schema', () => {

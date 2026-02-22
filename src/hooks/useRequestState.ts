@@ -5,19 +5,18 @@ import type {
   ResponseTab,
   HttpResponse,
 } from '@/types/index.js'
-import { HttpRequestError } from '@/types/index.js'
 import { resolveServerUrl, buildRequestUrl, sendRequest } from '@/http/index.js'
 import { generateBodyTemplate } from '@/http/index.js'
 
 export interface RequestState {
   readonly selectedServerIndex: number
   readonly cycleServer: () => void
-  readonly paramValues: Map<string, string>
+  readonly paramValues: ReadonlyMap<string, string>
   readonly setParamValue: (key: string, value: string) => void
   readonly bodyText: string
   readonly setBodyText: (text: string) => void
   readonly bodyError: string | null
-  readonly validateBody: () => boolean
+  readonly validateBody: (text?: string) => boolean
   readonly response: HttpResponse | null
   readonly error: string | null
   readonly isLoading: boolean
@@ -36,6 +35,7 @@ export function useRequestState(endpoint: Endpoint | null): RequestState {
   const [isLoading, setIsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<ResponseTab>('pretty')
   const isLoadingRef = useRef(false)
+  const requestIdRef = useRef(0)
 
   // Reset state on endpoint change (except server index)
   useEffect(() => {
@@ -44,6 +44,7 @@ export function useRequestState(endpoint: Endpoint | null): RequestState {
     setError(null)
     setIsLoading(false)
     isLoadingRef.current = false
+    requestIdRef.current += 1
     setActiveTab('pretty')
     setBodyError(null)
 
@@ -73,20 +74,27 @@ export function useRequestState(endpoint: Endpoint | null): RequestState {
     })
   }, [])
 
-  const validateBody = useCallback((): boolean => {
+  const validateBody = useCallback((text?: string): boolean => {
+    const toValidate = text ?? bodyText
     try {
-      JSON.parse(bodyText)
+      JSON.parse(toValidate)
       setBodyError(null)
       return true
-    } catch {
-      setBodyError('Invalid JSON')
+    } catch (e) {
+      const detail = e instanceof SyntaxError ? e.message : 'Invalid JSON'
+      setBodyError(detail)
       return false
     }
   }, [bodyText])
 
   const send = useCallback(
     (servers: readonly ServerInfo[]) => {
-      if (isLoadingRef.current || !endpoint || servers.length === 0) {
+      if (isLoadingRef.current || !endpoint) {
+        return
+      }
+
+      if (servers.length === 0) {
+        setError('No servers defined')
         return
       }
 
@@ -94,7 +102,7 @@ export function useRequestState(endpoint: Endpoint | null): RequestState {
       const server = servers[serverIdx]
       const serverUrl = resolveServerUrl(server)
 
-      // Build path params from paramValues
+      // Build path params and validate required ones
       const pathParams = new Map<string, string>()
       for (const param of endpoint.parameters) {
         if (param.location === 'path') {
@@ -102,11 +110,30 @@ export function useRequestState(endpoint: Endpoint | null): RequestState {
           const value = paramValues.get(key)
           if (value) {
             pathParams.set(param.name, value)
+          } else {
+            setError(`Missing required path parameter: ${param.name}`)
+            return
           }
         }
       }
 
-      const url = buildRequestUrl(serverUrl, endpoint.path, pathParams)
+      let url = buildRequestUrl(serverUrl, endpoint.path, pathParams)
+
+      // Append query params
+      const queryParams = new URLSearchParams()
+      for (const param of endpoint.parameters) {
+        if (param.location === 'query') {
+          const key = `query:${param.name}`
+          const value = paramValues.get(key)
+          if (value) {
+            queryParams.set(param.name, value)
+          }
+        }
+      }
+      const queryString = queryParams.toString()
+      if (queryString) {
+        url += `?${queryString}`
+      }
 
       // Build headers from header params
       const headers = new Map<string, string>()
@@ -120,8 +147,8 @@ export function useRequestState(endpoint: Endpoint | null): RequestState {
         }
       }
 
-      // Add Content-Type for methods with body
-      const hasBody = ['post', 'put', 'patch'].includes(endpoint.method)
+      // Add Content-Type when endpoint has a request body
+      const hasBody = endpoint.requestBody !== undefined
       if (hasBody) {
         headers.set('Content-Type', 'application/json')
       }
@@ -130,6 +157,8 @@ export function useRequestState(endpoint: Endpoint | null): RequestState {
       isLoadingRef.current = true
       setError(null)
 
+      const currentRequestId = ++requestIdRef.current
+
       sendRequest({
         method: endpoint.method,
         url,
@@ -137,15 +166,18 @@ export function useRequestState(endpoint: Endpoint | null): RequestState {
         body: hasBody ? bodyText : undefined,
       })
         .then(res => {
+          if (requestIdRef.current !== currentRequestId) return
           setResponse(res)
           setActiveTab('pretty')
         })
         .catch((err: unknown) => {
+          if (requestIdRef.current !== currentRequestId) return
           const message =
-            err instanceof HttpRequestError ? err.message : 'Unknown error'
+            err instanceof Error ? err.message : String(err)
           setError(message)
         })
         .finally(() => {
+          if (requestIdRef.current !== currentRequestId) return
           setIsLoading(false)
           isLoadingRef.current = false
         })
