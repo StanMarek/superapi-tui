@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'bun:test'
+import { describe, it, expect, mock } from 'bun:test'
 import { render } from 'ink-testing-library'
 import { SchemaView } from '@/components/SchemaView.js'
 import type { SchemaInfo } from '@/types/index.js'
@@ -184,6 +184,51 @@ describe('SchemaView', () => {
       await delay(50)
       const frame = lastFrame()!
       expect(frame).toContain('User email address')
+    })
+  })
+
+  describe('$ref navigation callback', () => {
+    it('calls onNavigateRef when Enter is pressed on a $ref row', async () => {
+      const onNavigateRef = mock(() => {})
+      const objectSchema = schema({
+        type: 'object',
+        displayType: 'object',
+        properties: new Map([
+          ['pet', schema({ type: 'object', displayType: 'Pet', refName: 'Pet' })],
+        ]),
+      })
+      const { stdin } = render(
+        <SchemaView schema={objectSchema} cursorIndex={0} onNavigateRef={onNavigateRef} isFocused={true} />,
+      )
+      stdin.write('\r')
+      await delay(50)
+      expect(onNavigateRef).toHaveBeenCalledTimes(1)
+      const lastCall = onNavigateRef.mock.lastCall as unknown as [SchemaInfo, string]
+      expect(lastCall[1]).toBe('Pet')
+      expect(lastCall[0].refName).toBe('Pet')
+    })
+  })
+
+  describe('Self-managed cursor navigation', () => {
+    it('navigates rows with j/k in self-managed mode', async () => {
+      const objectSchema = schema({
+        type: 'object',
+        displayType: 'object',
+        properties: new Map([
+          ['id', schema({ type: 'integer', displayType: 'integer' })],
+          ['name', schema({ type: 'string', displayType: 'string', description: 'User name' })],
+        ]),
+      })
+      // cursorIndex={-1} + isFocused={true} = self-managed mode
+      const { lastFrame, stdin } = render(
+        <SchemaView schema={objectSchema} cursorIndex={-1} onNavigateRef={() => {}} isFocused={true} />,
+      )
+      // Move down to 'name' row, then press Enter to expand
+      stdin.write('j')
+      await delay(50)
+      stdin.write('\r')
+      await delay(50)
+      expect(lastFrame()!).toContain('User name')
     })
   })
 })

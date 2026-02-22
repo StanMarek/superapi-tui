@@ -12,6 +12,7 @@ interface Props {
   readonly endpoint: Endpoint | null
   readonly isFocused: boolean
   readonly componentSchemas: ReadonlyMap<string, SchemaInfo>
+  readonly onTextCaptureChange?: (active: boolean) => void
 }
 
 type SectionId = 'parameters' | 'requestBody' | 'responses'
@@ -35,7 +36,7 @@ function buildSections(endpoint: Endpoint): readonly Section[] {
   return sections
 }
 
-export function EndpointDetail({ endpoint, isFocused, componentSchemas }: Props) {
+export function EndpointDetail({ endpoint, isFocused, componentSchemas, onTextCaptureChange }: Props) {
   const schemaNav = useSchemaNavigation()
   const [collapsedSections, setCollapsedSections] = useState<ReadonlySet<SectionId>>(new Set())
 
@@ -62,6 +63,11 @@ export function EndpointDetail({ endpoint, isFocused, componentSchemas }: Props)
     setCollapsedSections(new Set())
   }, [endpoint])
 
+  // Suppress global keybindings (q quit) when in schema drill-down view
+  useEffect(() => {
+    onTextCaptureChange?.(schemaNav.currentView === 'schema')
+  }, [schemaNav.currentView, onTextCaptureChange])
+
   const toggleSection = (sectionId: SectionId) => {
     setCollapsedSections(prev => {
       const next = new Set(prev)
@@ -75,9 +81,9 @@ export function EndpointDetail({ endpoint, isFocused, componentSchemas }: Props)
   }
 
   const handleNavigateRef = (schema: SchemaInfo, label: string) => {
-    // Look up in component schemas for full definition
+    // Look up in component schemas for full definition; fall back to inline schema if not found
     const fullSchema = label ? componentSchemas.get(label) : undefined
-    schemaNav.push(fullSchema ?? schema, label)
+    schemaNav.push(fullSchema ?? schema, label || '(anonymous)')
   }
 
   // All hooks must precede conditional returns
@@ -163,7 +169,7 @@ export function EndpointDetail({ endpoint, isFocused, componentSchemas }: Props)
           <Text dimColor>Schema: </Text>
           <Text bold color="cyan">{schemaNav.breadcrumbs.join(' > ')}</Text>
         </Box>
-        <Text dimColor>Press Escape to go back</Text>
+        <Text dimColor>Press Escape or h to go back</Text>
         <Box marginTop={1} flexDirection="column">
           <SchemaView
             schema={schemaNav.currentSchema}

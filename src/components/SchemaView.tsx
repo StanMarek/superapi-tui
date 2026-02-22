@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Box, Text, useInput } from 'ink'
 import type { SchemaInfo, SchemaConstraints } from '@/types/index.js'
 
@@ -8,7 +8,7 @@ export interface SchemaFieldRow {
   readonly depth: number
   readonly required: boolean
   readonly isCompositionLabel?: boolean
-  readonly compositionType?: string
+  readonly compositionType?: 'allOf' | 'oneOf' | 'anyOf'
 }
 
 interface Props {
@@ -18,11 +18,17 @@ interface Props {
   readonly isFocused?: boolean
 }
 
+const MAX_FLATTEN_DEPTH = 20
+
 function flattenSchema(
   schema: SchemaInfo,
   depth: number = 0,
   parentRequired: readonly string[] = [],
 ): readonly SchemaFieldRow[] {
+  if (depth > MAX_FLATTEN_DEPTH) {
+    return [{ name: '(truncated)', schema, depth, required: false }]
+  }
+
   const rows: SchemaFieldRow[] = []
 
   // Composition types
@@ -77,10 +83,29 @@ function formatConstraints(constraints: SchemaConstraints): string {
   return parts.join(', ')
 }
 
+function safeStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return '(unable to display)'
+  }
+}
+
 export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = false }: Props) {
   const [expandedRows, setExpandedRows] = useState<ReadonlySet<number>>(new Set())
+  const [internalCursor, setInternalCursor] = useState(0)
 
   const rows = flattenSchema(schema)
+
+  // Self-managed mode: SchemaView handles its own cursor when focused but no external cursor
+  const selfManaged = isFocused && cursorIndex < 0
+  const activeCursor = selfManaged ? internalCursor : cursorIndex
+
+  // Reset state when schema changes
+  useEffect(() => {
+    setExpandedRows(new Set())
+    setInternalCursor(0)
+  }, [schema])
 
   const toggleExpand = (index: number) => {
     setExpandedRows(prev => {
@@ -96,8 +121,28 @@ export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = fal
 
   useInput(
     (input, key) => {
+      // Self-managed cursor navigation
+      if (selfManaged) {
+        if (input === 'j' || key.downArrow) {
+          setInternalCursor(prev => Math.min(prev + 1, rows.length - 1))
+          return
+        }
+        if (input === 'k' || key.upArrow) {
+          setInternalCursor(prev => Math.max(prev - 1, 0))
+          return
+        }
+        if (input === 'g') {
+          setInternalCursor(0)
+          return
+        }
+        if (input === 'G') {
+          setInternalCursor(Math.max(rows.length - 1, 0))
+          return
+        }
+      }
+
       if (!key.return) return
-      const row = rows[cursorIndex]
+      const row = rows[activeCursor]
       if (!row) return
 
       // Navigate into $ref
@@ -107,9 +152,9 @@ export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = fal
       }
 
       // Toggle field detail expansion
-      toggleExpand(cursorIndex)
+      toggleExpand(activeCursor)
     },
-    { isActive: isFocused && cursorIndex >= 0 },
+    { isActive: isFocused && (selfManaged || activeCursor >= 0) },
   )
 
   // Primitive / non-object top-level
@@ -131,7 +176,7 @@ export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = fal
   return (
     <Box flexDirection="column">
       {rows.map((row, index) => {
-        const isSelected = index === cursorIndex && isFocused
+        const isSelected = index === activeCursor && isFocused
         const indent = '  '.repeat(row.depth)
         const isExpanded = expandedRows.has(index)
         const fieldSchema = row.schema
@@ -179,10 +224,10 @@ export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = fal
                   <Text dimColor>  {formatConstraints(fieldSchema.constraints)}</Text>
                 )}
                 {fieldSchema.example !== undefined && (
-                  <Text dimColor>  example: {JSON.stringify(fieldSchema.example)}</Text>
+                  <Text dimColor>  example: {safeStringify(fieldSchema.example)}</Text>
                 )}
                 {fieldSchema.defaultValue !== undefined && (
-                  <Text dimColor>  default: {JSON.stringify(fieldSchema.defaultValue)}</Text>
+                  <Text dimColor>  default: {safeStringify(fieldSchema.defaultValue)}</Text>
                 )}
               </Box>
             )}

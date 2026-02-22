@@ -203,12 +203,59 @@ describe('EndpointDetail', () => {
       expect(frame).toContain('User')
     })
 
-    it('returns to endpoint view on Escape from schema view', () => {
+    it('shows endpoint view sections on initial render', () => {
       const { lastFrame } = render(
         <EndpointDetail endpoint={endpointWithDetails} isFocused={true} componentSchemas={componentSchemas} />,
       )
       const frame = lastFrame()!
       expect(frame).toContain('Parameters')
+      expect(frame).toContain('Responses')
+    })
+  })
+
+  describe('h/l collapse/expand', () => {
+    it('collapses section with h key', async () => {
+      const { lastFrame, stdin } = render(
+        <EndpointDetail endpoint={endpointWithDetails} isFocused={true} componentSchemas={componentSchemas} />,
+      )
+      expect(lastFrame()!).toContain('include')
+      // h on Parameters header should collapse it
+      stdin.write('h')
+      await delay(50)
+      expect(lastFrame()!).not.toContain('include')
+    })
+
+    it('expands collapsed section with l key', async () => {
+      const { lastFrame, stdin } = render(
+        <EndpointDetail endpoint={endpointWithDetails} isFocused={true} componentSchemas={componentSchemas} />,
+      )
+      // Collapse first
+      stdin.write('h')
+      await delay(50)
+      expect(lastFrame()!).not.toContain('include')
+      // Expand with l
+      stdin.write('l')
+      await delay(50)
+      expect(lastFrame()!).toContain('include')
+    })
+  })
+
+  describe('State reset on endpoint change', () => {
+    it('re-expands previously collapsed sections when endpoint changes', async () => {
+      const { lastFrame, stdin, rerender } = render(
+        <EndpointDetail endpoint={endpointWithDetails} isFocused={true} componentSchemas={componentSchemas} />,
+      )
+      // Collapse Parameters section
+      stdin.write('\r')
+      await delay(50)
+      expect(lastFrame()!).not.toContain('include')
+      // Switch endpoint
+      rerender(
+        <EndpointDetail endpoint={endpointWithBody} isFocused={true} componentSchemas={componentSchemas} />,
+      )
+      await delay(50)
+      // New endpoint should have expanded sections
+      expect(lastFrame()!).toContain('Request Body')
     })
   })
 })

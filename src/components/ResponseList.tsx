@@ -61,7 +61,7 @@ export function ResponseList({ responses, onNavigateRef }: Props) {
                   <Text>
                     {header.name}
                     {'  '}
-                    <Text dimColor>{header.schema?.displayType ?? 'string'}</Text>
+                    <Text dimColor>{header.schema?.displayType ?? '(no schema)'}</Text>
                   </Text>
                 </Box>
               ))}

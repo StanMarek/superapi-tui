@@ -37,6 +37,7 @@ export default function App({ spec }: Props) {
           endpoint={selectedEndpoint}
           isFocused={focusedPanel === 'detail'}
           componentSchemas={spec.componentSchemas}
+          onTextCaptureChange={setTextCapture}
         />
       </Box>
       <Box
