@@ -114,8 +114,8 @@ Three methods, configurable per-session (session-only, no config persistence). A
 - **API Key** — header or query parameter (configurable names)
 - **Basic Auth** — `Authorization: Basic <base64>`
 
-**Auth types:** `src/types/auth.ts` — `AuthMethod`, `AuthOption`, `AuthCredentials` (discriminated union), `AuthState`
-**Auth utilities:** `src/http/auth.ts` — `deriveAuthOptions(schemes)` maps SecuritySchemeInfo → AuthOption[], `applyAuth(credentials)` → headers + queryParams maps
+**Auth types:** `src/types/auth.ts` — `AuthMethod`, `AuthFieldKey` (literal union), `AuthOption` (discriminated union by method), `AuthCredentials` (discriminated union), `AuthState`
+**Auth utilities:** `src/http/auth.ts` — `deriveAuthOptions(schemes)` → `DeriveAuthResult { options, unsupportedSchemes }`, `applyAuth(credentials)` → headers + queryParams maps (skips empty values)
 **Hook integration:** `useRequestState(endpoint, securitySchemes)` manages auth state, injects auth into `send()`
 
 ### Keyboard Navigation
@@ -144,6 +144,7 @@ Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), 
 - Test hooks via harness components: render a component that calls the hook and displays state as text, then assert on `lastFrame()`
 - Trigger hook actions via `useEffect` + `setTimeout`, never as side effects during render
 - For multi-phase tests (set state then validate): use a phase state machine (`'set' | 'validate' | 'done'`) with separate `useEffect` per phase
+- Hook harness test data (endpoints, servers) must be created OUTSIDE the component — objects created inside render are new each time, triggering change-detection effects infinitely
 
 ## Dependencies — Gotchas
 
@@ -166,6 +167,9 @@ Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), 
 - OpenAPI path/server variable regex: use `\{([^}]+)\}` not `\{(\w+)\}` — param names can contain hyphens and dots
 - Callbacks consuming React state: accept optional arg for the current value to avoid stale closures (e.g., `validateBody(text?: string)` uses `text ?? bodyText`)
 - Stale async response protection: use a `useRef` counter incremented on endpoint change; ignore responses where counter has moved on
+- Exhaustive switch defaults: use `never` type check in discriminated union switches to catch missing cases at compile time
+- Ink paste handling: use ref-backed edit buffer with debounced state sync (16ms) to prevent render storms — terminals may send paste char-by-char, causing one setState + re-render per character
+- Auth injection safety: `applyAuth` must skip setting headers/params when credential values are empty — sending `Authorization: Bearer ` (empty token) causes 401s
 
 ## Design Decisions
 
