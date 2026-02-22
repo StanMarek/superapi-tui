@@ -50,6 +50,7 @@ export default function App({ spec }: Props) {
           endpoint={selectedEndpoint}
           isFocused={focusedPanel === 'request'}
           servers={spec.servers}
+          securitySchemes={spec.securitySchemes}
           onTextCaptureChange={setTextCapture}
         />
       </Box>

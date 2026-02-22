@@ -269,3 +269,235 @@ describe('RequestPanel integration', () => {
     expect(lastFrame()).toContain('"name"')
   })
 })
+
+describe('Auth integration', () => {
+  test('bearer auth: configure token → send → verify Authorization header', async () => {
+    const fetchMock = mock(() =>
+      Promise.resolve(new Response('{"ok":true}', {
+        status: 200,
+        statusText: 'OK',
+      })),
+    )
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const bearerSpec: ParsedSpec = {
+      ...testSpec,
+      securitySchemes: [
+        { name: 'bearerAuth', type: 'http', scheme: 'bearer' },
+      ],
+    }
+
+    const { lastFrame, stdin } = render(<App spec={bearerSpec} />)
+    await delay(100)
+
+    // Select endpoint
+    stdin.write('j')
+    await delay(50)
+    stdin.write('\r')
+    await delay(50)
+
+    // Tab to request panel
+    stdin.write('\t')
+    await delay(50)
+    stdin.write('\t')
+    await delay(50)
+
+    // Open auth section
+    stdin.write('a')
+    await delay(50)
+
+    // Navigate to token field: server(0) → auth-toggle(1) → auth-type(2) → token(3)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+
+    // Enter edit mode, type token, confirm
+    stdin.write('\r')
+    await delay(50)
+    stdin.write('t')
+    await delay(30)
+    stdin.write('e')
+    await delay(30)
+    stdin.write('s')
+    await delay(30)
+    stdin.write('t')
+    await delay(30)
+    stdin.write('\r')
+    await delay(50)
+
+    // Send request
+    stdin.write('s')
+    await delay(500)
+
+    expect(lastFrame()).toContain('200')
+
+    // Verify Authorization header was sent
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][]
+    expect(calls.length).toBeGreaterThan(0)
+    const headers = calls[calls.length - 1][1].headers as Record<string, string>
+    expect(headers['Authorization']).toBe('Bearer test')
+  })
+
+  test('apiKey query: configure key → send → verify query param in URL', async () => {
+    const fetchMock = mock(() =>
+      Promise.resolve(new Response('{"ok":true}', {
+        status: 200,
+        statusText: 'OK',
+      })),
+    )
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const apiKeySpec: ParsedSpec = {
+      ...testSpec,
+      securitySchemes: [
+        { name: 'queryKey', type: 'apiKey', in: 'query', paramName: 'api_key' },
+      ],
+    }
+
+    const { lastFrame, stdin } = render(<App spec={apiKeySpec} />)
+    await delay(100)
+
+    // Select endpoint
+    stdin.write('j')
+    await delay(50)
+    stdin.write('\r')
+    await delay(50)
+
+    // Tab to request panel
+    stdin.write('\t')
+    await delay(50)
+    stdin.write('\t')
+    await delay(50)
+
+    // Open auth section
+    stdin.write('a')
+    await delay(50)
+
+    // Navigate to key field: server(0) → auth-toggle(1) → auth-type(2) → key(3)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+
+    // Enter edit mode, type key, confirm
+    stdin.write('\r')
+    await delay(50)
+    stdin.write('k')
+    await delay(30)
+    stdin.write('1')
+    await delay(30)
+    stdin.write('2')
+    await delay(30)
+    stdin.write('3')
+    await delay(30)
+    stdin.write('\r')
+    await delay(50)
+
+    // Send
+    stdin.write('s')
+    await delay(500)
+
+    expect(lastFrame()).toContain('200')
+
+    // Verify query param in URL
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][]
+    const url = calls[calls.length - 1][0]
+    expect(url).toContain('api_key=k123')
+  })
+
+  test('auth persists across endpoint changes', async () => {
+    const fetchMock = mock(() =>
+      Promise.resolve(new Response('{"ok":true}', {
+        status: 200,
+        statusText: 'OK',
+      })),
+    )
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const bearerSpec: ParsedSpec = {
+      ...testSpec,
+      securitySchemes: [
+        { name: 'bearerAuth', type: 'http', scheme: 'bearer' },
+      ],
+    }
+
+    const { lastFrame, stdin } = render(<App spec={bearerSpec} />)
+    await delay(100)
+
+    // Select first endpoint
+    stdin.write('j')
+    await delay(50)
+    stdin.write('\r')
+    await delay(50)
+
+    // Tab to request panel
+    stdin.write('\t')
+    await delay(50)
+    stdin.write('\t')
+    await delay(50)
+
+    // Open auth, configure token
+    stdin.write('a')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('\r')
+    await delay(50)
+    stdin.write('p')
+    await delay(30)
+    stdin.write('e')
+    await delay(30)
+    stdin.write('r')
+    await delay(30)
+    stdin.write('s')
+    await delay(30)
+    stdin.write('i')
+    await delay(30)
+    stdin.write('s')
+    await delay(30)
+    stdin.write('t')
+    await delay(30)
+    stdin.write('\r')
+    await delay(50)
+
+    // Auth toggle should show token was set
+    expect(lastFrame()).toContain('persist')
+
+    // Tab back to endpoint list
+    stdin.write('\t')
+    await delay(50)
+
+    // Select second endpoint (navigate down)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('\r')
+    await delay(50)
+
+    // Tab back to request panel
+    stdin.write('\t')
+    await delay(50)
+    stdin.write('\t')
+    await delay(50)
+
+    // Auth should still show the token
+    expect(lastFrame()).toContain('persist')
+
+    // Send and verify the auth header is included
+    stdin.write('s')
+    await delay(500)
+
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][]
+    expect(calls.length).toBeGreaterThan(0)
+    const headers = calls[calls.length - 1][1].headers as Record<string, string>
+    expect(headers['Authorization']).toBe('Bearer persist')
+  })
+})

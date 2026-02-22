@@ -71,7 +71,7 @@ CLI entry point compiles to `./dist/cli.js`. The `bin` field in package.json map
 - **Spec Parser** — Validates and structures OpenAPI v3.0/v3.1 data
 - **TUI Components** — Ink/React components for each panel
 - **HTTP Client** — Sends requests to endpoints using selected server + auth
-- **HTTP Module** — `src/http/` — `client.ts` (resolveServerUrl, buildRequestUrl, validateSsrf, sendRequest) + `template.ts` (generateBodyTemplate from schemas). Barrel export from `index.ts`
+- **HTTP Module** — `src/http/` — `client.ts` (resolveServerUrl, buildRequestUrl, validateSsrf, sendRequest) + `template.ts` (generateBodyTemplate from schemas) + `auth.ts` (deriveAuthOptions, applyAuth). Barrel export from `index.ts`
 - **Config Manager** — Reads/writes `~/.superapi-tui.json` (saved servers, auth presets, UI preferences)
 
 ### Data Layer
@@ -88,7 +88,7 @@ CLI entry point compiles to `./dist/cli.js`. The `bin` field in package.json map
 - **Panel types:** `PanelId = 'endpoints' | 'detail' | 'request'` — panels get `isFocused` prop, borders cyan when focused
 - **EndpointList:** Flat `ListRow` discriminated union model for cursor navigation, collapsible tag groups, `/` filter mode
 - **EndpointDetail:** Collapsible sections (Parameters, Request Body, Responses) with `sectionHeader`/`content` row model. Sub-components: `ParameterList`, `SchemaView` (recursive, self-managed cursor), `ResponseList`. Schema drill-down via `useSchemaNavigation` hook.
-- **RequestPanel:** Row model (`server` → `param` → `body-editor` → `send` → `response-tabs` → `response-content`). Discriminated union `Row` type. State managed by `useRequestState` hook. Inline param/body editing with text capture guard. Response viewer with Pretty/Raw/Headers tabs.
+- **RequestPanel:** Row model (`server` → `auth-toggle` → [`auth-type` → `auth-field`...] → `param` → `body-editor` → `send` → `response-tabs` → `response-content`). Discriminated union `Row` type. State managed by `useRequestState` hook. Inline param/body/auth-field editing with text capture guard. Response viewer with Pretty/Raw/Headers tabs. Auth section is collapsible (`a` key), with type cycling and credential fields (bearer token, apiKey key, basic username/password).
 - **SpecLoader:** Async wrapper component handling loading/error/loaded states with Spinner from `@inkjs/ui`
 - **Components:** `src/components/` with barrel export from `index.ts`
 - **Hooks:** `src/hooks/` with barrel export from `index.ts`
@@ -108,10 +108,15 @@ The app accepts a single argument that can be:
 
 ### Authentication
 
-Three methods, configurable per-session or via config file:
+Three methods, configurable per-session (session-only, no config persistence). Auth is global — one setting for all endpoints, persists across endpoint changes. Spec-aware: auth options derived from `securitySchemes`; falls back to all 3 types if spec has none (or only unsupported schemes like oauth2/openIdConnect/cookie-apiKey).
+
 - **Bearer Token** — `Authorization: Bearer <token>`
 - **API Key** — header or query parameter (configurable names)
 - **Basic Auth** — `Authorization: Basic <base64>`
+
+**Auth types:** `src/types/auth.ts` — `AuthMethod`, `AuthFieldKey` (literal union), `AuthOption` (discriminated union by method), `AuthCredentials` (discriminated union), `AuthState`
+**Auth utilities:** `src/http/auth.ts` — `deriveAuthOptions(schemes)` → `DeriveAuthResult { options, unsupportedSchemes }`, `applyAuth(credentials)` → headers + queryParams maps (skips empty values)
+**Hook integration:** `useRequestState(endpoint, securitySchemes)` manages auth state, injects auth into `send()`
 
 ### Keyboard Navigation
 
@@ -139,6 +144,7 @@ Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), 
 - Test hooks via harness components: render a component that calls the hook and displays state as text, then assert on `lastFrame()`
 - Trigger hook actions via `useEffect` + `setTimeout`, never as side effects during render
 - For multi-phase tests (set state then validate): use a phase state machine (`'set' | 'validate' | 'done'`) with separate `useEffect` per phase
+- Hook harness test data (endpoints, servers) must be created OUTSIDE the component — objects created inside render are new each time, triggering change-detection effects infinitely
 
 ## Dependencies — Gotchas
 
@@ -161,6 +167,9 @@ Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), 
 - OpenAPI path/server variable regex: use `\{([^}]+)\}` not `\{(\w+)\}` — param names can contain hyphens and dots
 - Callbacks consuming React state: accept optional arg for the current value to avoid stale closures (e.g., `validateBody(text?: string)` uses `text ?? bodyText`)
 - Stale async response protection: use a `useRef` counter incremented on endpoint change; ignore responses where counter has moved on
+- Exhaustive switch defaults: use `never` type check in discriminated union switches to catch missing cases at compile time
+- Ink paste handling: use ref-backed edit buffer with debounced state sync (16ms) to prevent render storms — terminals may send paste char-by-char, causing one setState + re-render per character
+- Auth injection safety: `applyAuth` must skip setting headers/params when credential values are empty — sending `Authorization: Bearer ` (empty token) causes 401s
 
 ## Design Decisions
 
