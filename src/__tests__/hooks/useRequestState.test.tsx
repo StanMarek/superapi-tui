@@ -2,7 +2,7 @@ import { describe, test, expect, mock, afterEach } from 'bun:test'
 import { render } from 'ink-testing-library'
 import { Box, Text } from 'ink'
 import { useRequestState } from '@/hooks/useRequestState.js'
-import type { Endpoint, ServerInfo, SchemaInfo } from '@/types/index.js'
+import type { Endpoint, ServerInfo, SchemaInfo, SecuritySchemeInfo } from '@/types/index.js'
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -32,10 +32,11 @@ function makeSchema(overrides: Partial<SchemaInfo> = {}): SchemaInfo {
 
 interface HarnessProps {
   readonly endpoint: Endpoint | null
+  readonly securitySchemes?: readonly SecuritySchemeInfo[]
 }
 
-function Harness({ endpoint }: HarnessProps) {
-  const state = useRequestState(endpoint)
+function Harness({ endpoint, securitySchemes = [] }: HarnessProps) {
+  const state = useRequestState(endpoint, securitySchemes)
   return (
     <Box flexDirection="column">
       <Text>serverIndex:{state.selectedServerIndex}</Text>
@@ -52,8 +53,8 @@ function Harness({ endpoint }: HarnessProps) {
 }
 
 // Harness that exposes actions through keyboard triggers
-function ActionHarness({ endpoint }: HarnessProps) {
-  const state = useRequestState(endpoint)
+function ActionHarness({ endpoint, securitySchemes = [] }: HarnessProps) {
+  const state = useRequestState(endpoint, securitySchemes)
 
   // Expose state and actions via text output
   return (
@@ -150,7 +151,7 @@ describe('useRequestState', () => {
 
 describe('useRequestState - cycleServer', () => {
   function CycleHarness({ endpoint }: { readonly endpoint: Endpoint | null }) {
-    const state = useRequestState(endpoint)
+    const state = useRequestState(endpoint, [])
     return (
       <Box flexDirection="column">
         <Text>serverIndex:{state.selectedServerIndex}</Text>
@@ -185,7 +186,7 @@ describe('useRequestState - validateBody', () => {
     })
 
     function ValidHarness() {
-      const state = useRequestState(endpoint)
+      const state = useRequestState(endpoint, [])
       const [result, setResult] = useState<boolean | null>(null)
       useEffect(() => {
         // body is auto-generated valid JSON from template
@@ -208,7 +209,7 @@ describe('useRequestState - validateBody', () => {
 
   test('validateBody returns false for invalid JSON body', async () => {
     function InvalidHarness() {
-      const state = useRequestState(null)
+      const state = useRequestState(null, [])
       const [result, setResult] = useState<boolean | null>(null)
       const [phase, setPhase] = useState<'set' | 'validate' | 'done'>('set')
 
@@ -249,11 +250,13 @@ describe('useRequestState - send', () => {
   function SendHarness({
     endpoint,
     servers,
+    securitySchemes = [],
   }: {
     readonly endpoint: Endpoint
     readonly servers: readonly ServerInfo[]
+    readonly securitySchemes?: readonly SecuritySchemeInfo[]
   }) {
-    const state = useRequestState(endpoint)
+    const state = useRequestState(endpoint, securitySchemes)
     const sentRef = useRef(false)
 
     useEffect(() => {
@@ -324,5 +327,388 @@ describe('useRequestState - send', () => {
 
     const { lastFrame } = render(<ActionHarness endpoint={null} />)
     expect(lastFrame()).toContain('status:none')
+  })
+})
+
+describe('useRequestState - auth state', () => {
+  function AuthHarness({
+    endpoint,
+    securitySchemes = [],
+  }: {
+    readonly endpoint: Endpoint | null
+    readonly securitySchemes?: readonly SecuritySchemeInfo[]
+  }) {
+    const state = useRequestState(endpoint, securitySchemes)
+    return (
+      <Box flexDirection="column">
+        <Text>authExpanded:{String(state.auth.authExpanded)}</Text>
+        <Text>optionCount:{state.auth.availableOptions.length}</Text>
+        <Text>selectedIndex:{state.auth.selectedOptionIndex}</Text>
+        <Text>credMethod:{state.auth.credentials.method}</Text>
+        {state.auth.availableOptions.map((opt, i) => (
+          <Text key={i}>option:{opt.method}:{opt.label}</Text>
+        ))}
+      </Box>
+    )
+  }
+
+  test('initializes with auth collapsed', () => {
+    const { lastFrame } = render(<AuthHarness endpoint={null} />)
+    expect(lastFrame()).toContain('authExpanded:false')
+  })
+
+  test('defaults credentials to bearer (first fallback option)', () => {
+    const { lastFrame } = render(<AuthHarness endpoint={null} />)
+    expect(lastFrame()).toContain('credMethod:bearer')
+  })
+
+  test('derives options from securitySchemes', () => {
+    const schemes: SecuritySchemeInfo[] = [
+      { name: 'bearerAuth', type: 'http', scheme: 'bearer' },
+      { name: 'apiKeyAuth', type: 'apiKey', in: 'header', paramName: 'X-API-Key' },
+    ]
+    const { lastFrame } = render(<AuthHarness endpoint={null} securitySchemes={schemes} />)
+    expect(lastFrame()).toContain('optionCount:2')
+    expect(lastFrame()).toContain('option:bearer:')
+    expect(lastFrame()).toContain('option:apiKey:')
+  })
+
+  test('falls back to 3 generic options when no schemes provided', () => {
+    const { lastFrame } = render(<AuthHarness endpoint={null} securitySchemes={[]} />)
+    expect(lastFrame()).toContain('optionCount:3')
+  })
+
+  test('toggleAuth toggles authExpanded', async () => {
+    function ToggleHarness() {
+      const state = useRequestState(null, [])
+      const [phase, setPhase] = useState<'toggle' | 'done'>('toggle')
+
+      useEffect(() => {
+        if (phase === 'toggle') {
+          const timer = setTimeout(() => {
+            state.auth.toggleAuth()
+            setPhase('done')
+          }, 10)
+          return () => clearTimeout(timer)
+        }
+      }, [phase])
+
+      return <Text>authExpanded:{String(state.auth.authExpanded)}</Text>
+    }
+
+    const { lastFrame } = render(<ToggleHarness />)
+    await delay(100)
+    expect(lastFrame()).toContain('authExpanded:true')
+  })
+
+  test('cycleAuthOption advances selectedOptionIndex', async () => {
+    function CycleHarness() {
+      const state = useRequestState(null, [])
+      const [phase, setPhase] = useState<'cycle' | 'done'>('cycle')
+
+      useEffect(() => {
+        if (phase === 'cycle') {
+          const timer = setTimeout(() => {
+            state.auth.cycleAuthOption()
+            setPhase('done')
+          }, 10)
+          return () => clearTimeout(timer)
+        }
+      }, [phase])
+
+      return (
+        <Box flexDirection="column">
+          <Text>selectedIndex:{state.auth.selectedOptionIndex}</Text>
+          <Text>credMethod:{state.auth.credentials.method}</Text>
+        </Box>
+      )
+    }
+
+    const { lastFrame } = render(<CycleHarness />)
+    await delay(100)
+    // After cycling once from index 0 (bearer) → index 1 (apiKey)
+    expect(lastFrame()).toContain('selectedIndex:1')
+  })
+
+  test('cycleAuthOption wraps around', async () => {
+    function WrapHarness() {
+      const state = useRequestState(null, [])
+      const [cycleCount, setCycleCount] = useState(0)
+
+      useEffect(() => {
+        if (cycleCount < 3) {
+          const timer = setTimeout(() => {
+            state.auth.cycleAuthOption()
+            setCycleCount(prev => prev + 1)
+          }, 10)
+          return () => clearTimeout(timer)
+        }
+      }, [cycleCount])
+
+      return <Text>selectedIndex:{state.auth.selectedOptionIndex}</Text>
+    }
+
+    const { lastFrame } = render(<WrapHarness />)
+    await delay(200)
+    // 3 options, cycle 3 times: 0→1→2→0
+    expect(lastFrame()).toContain('selectedIndex:0')
+  })
+
+  test('setAuthField updates bearer token', async () => {
+    function FieldHarness() {
+      const state = useRequestState(null, [])
+      const [phase, setPhase] = useState<'set' | 'done'>('set')
+
+      useEffect(() => {
+        if (phase === 'set') {
+          const timer = setTimeout(() => {
+            state.auth.setAuthField('token', 'my-secret-token')
+            setPhase('done')
+          }, 10)
+          return () => clearTimeout(timer)
+        }
+      }, [phase])
+
+      return (
+        <Box flexDirection="column">
+          <Text>credMethod:{state.auth.credentials.method}</Text>
+          <Text>token:{state.auth.credentials.method === 'bearer' ? state.auth.credentials.token : 'n/a'}</Text>
+        </Box>
+      )
+    }
+
+    const { lastFrame } = render(<FieldHarness />)
+    await delay(100)
+    expect(lastFrame()).toContain('credMethod:bearer')
+    expect(lastFrame()).toContain('token:my-secret-token')
+  })
+
+  test('setAuthField updates basic username and password', async () => {
+    function BasicHarness() {
+      const state = useRequestState(null, [])
+      const [phase, setPhase] = useState(0)
+
+      useEffect(() => {
+        if (phase === 0) {
+          // Cycle to basic (index 2 in fallback: bearer=0, apiKey=1, basic=2)
+          const timer = setTimeout(() => {
+            state.auth.cycleAuthOption()
+            state.auth.cycleAuthOption()
+            setPhase(1)
+          }, 10)
+          return () => clearTimeout(timer)
+        }
+      }, [phase])
+
+      useEffect(() => {
+        if (phase === 1) {
+          const timer = setTimeout(() => {
+            state.auth.setAuthField('username', 'admin')
+            state.auth.setAuthField('password', 'secret')
+            setPhase(2)
+          }, 10)
+          return () => clearTimeout(timer)
+        }
+      }, [phase])
+
+      const creds = state.auth.credentials
+      return (
+        <Box flexDirection="column">
+          <Text>credMethod:{creds.method}</Text>
+          <Text>username:{creds.method === 'basic' ? creds.username : 'n/a'}</Text>
+          <Text>password:{creds.method === 'basic' ? creds.password : 'n/a'}</Text>
+        </Box>
+      )
+    }
+
+    const { lastFrame } = render(<BasicHarness />)
+    await delay(200)
+    expect(lastFrame()).toContain('credMethod:basic')
+    expect(lastFrame()).toContain('username:admin')
+    expect(lastFrame()).toContain('password:secret')
+  })
+
+  test('auth state persists across endpoint changes', async () => {
+    const ep1 = makeEndpoint({ id: 'ep1' })
+    const ep2 = makeEndpoint({ id: 'ep2' })
+
+    function PersistHarness({ endpoint }: { readonly endpoint: Endpoint }) {
+      const state = useRequestState(endpoint, [])
+      const setRef = useRef(false)
+
+      useEffect(() => {
+        if (!setRef.current) {
+          setRef.current = true
+          const timer = setTimeout(() => {
+            state.auth.setAuthField('token', 'persist-token')
+          }, 10)
+          return () => clearTimeout(timer)
+        }
+      }, [])
+
+      return (
+        <Box flexDirection="column">
+          <Text>credMethod:{state.auth.credentials.method}</Text>
+          <Text>token:{state.auth.credentials.method === 'bearer' ? state.auth.credentials.token : 'n/a'}</Text>
+        </Box>
+      )
+    }
+
+    const { lastFrame, rerender } = render(<PersistHarness endpoint={ep1} />)
+    await delay(100)
+    expect(lastFrame()).toContain('token:persist-token')
+
+    // Change endpoint — auth should persist
+    rerender(<PersistHarness endpoint={ep2} />)
+    await delay(50)
+    expect(lastFrame()).toContain('token:persist-token')
+  })
+
+  test('cycleAuthOption resets credential fields', async () => {
+    function ResetHarness() {
+      const state = useRequestState(null, [])
+      const [phase, setPhase] = useState(0)
+
+      useEffect(() => {
+        if (phase === 0) {
+          const timer = setTimeout(() => {
+            state.auth.setAuthField('token', 'should-be-cleared')
+            setPhase(1)
+          }, 10)
+          return () => clearTimeout(timer)
+        }
+      }, [phase])
+
+      useEffect(() => {
+        if (phase === 1) {
+          const timer = setTimeout(() => {
+            // Cycle from bearer to apiKey
+            state.auth.cycleAuthOption()
+            setPhase(2)
+          }, 10)
+          return () => clearTimeout(timer)
+        }
+      }, [phase])
+
+      const creds = state.auth.credentials
+      return (
+        <Box flexDirection="column">
+          <Text>credMethod:{creds.method}</Text>
+          <Text>phase:{phase}</Text>
+        </Box>
+      )
+    }
+
+    const { lastFrame } = render(<ResetHarness />)
+    await delay(200)
+    // Should have cycled to apiKey
+    expect(lastFrame()).toContain('credMethod:apiKey')
+  })
+
+  test('send injects bearer auth header', async () => {
+    const fetchMock = mock(() =>
+      Promise.resolve(new Response('{}', { status: 200 })),
+    )
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const stableEndpoint = makeEndpoint()
+    const stableServers: readonly ServerInfo[] = [{ url: 'https://api.example.com', variables: new Map() }]
+
+    function AuthSendHarness() {
+      const state = useRequestState(stableEndpoint, [])
+      const [phase, setPhase] = useState(0)
+
+      useEffect(() => {
+        if (phase === 0) {
+          const timer = setTimeout(() => {
+            state.auth.setAuthField('token', 'test-token')
+            setPhase(1)
+          }, 10)
+          return () => clearTimeout(timer)
+        }
+      }, [phase])
+
+      useEffect(() => {
+        if (phase === 1) {
+          const timer = setTimeout(() => {
+            state.send(stableServers)
+            setPhase(2)
+          }, 10)
+          return () => clearTimeout(timer)
+        }
+      }, [phase])
+
+      return (
+        <Box flexDirection="column">
+          <Text>status:{state.response?.status ?? 'none'}</Text>
+          <Text>phase:{phase}</Text>
+        </Box>
+      )
+    }
+
+    const { lastFrame } = render(<AuthSendHarness />)
+    await delay(300)
+    expect(lastFrame()).toContain('status:200')
+
+    // Verify the fetch was called with Authorization header
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][]
+    expect(calls.length).toBeGreaterThan(0)
+    const lastCall = calls[calls.length - 1]
+    const headers = lastCall[1].headers as Record<string, string>
+    expect(headers['Authorization']).toBe('Bearer test-token')
+  })
+
+  test('send injects apiKey as query param', async () => {
+    const fetchMock = mock(() =>
+      Promise.resolve(new Response('{}', { status: 200 })),
+    )
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const schemes: SecuritySchemeInfo[] = [
+      { name: 'queryKey', type: 'apiKey', in: 'query', paramName: 'api_key' },
+    ]
+    const stableEndpoint = makeEndpoint()
+    const stableServers: readonly ServerInfo[] = [{ url: 'https://api.example.com', variables: new Map() }]
+
+    function ApiKeySendHarness() {
+      const state = useRequestState(stableEndpoint, schemes)
+      const [phase, setPhase] = useState(0)
+
+      useEffect(() => {
+        if (phase === 0) {
+          const timer = setTimeout(() => {
+            state.auth.setAuthField('key', 'my-api-key')
+            setPhase(1)
+          }, 10)
+          return () => clearTimeout(timer)
+        }
+      }, [phase])
+
+      useEffect(() => {
+        if (phase === 1) {
+          const timer = setTimeout(() => {
+            state.send(stableServers)
+            setPhase(2)
+          }, 10)
+          return () => clearTimeout(timer)
+        }
+      }, [phase])
+
+      return (
+        <Box flexDirection="column">
+          <Text>status:{state.response?.status ?? 'none'}</Text>
+          <Text>phase:{phase}</Text>
+        </Box>
+      )
+    }
+
+    const { lastFrame } = render(<ApiKeySendHarness />)
+    await delay(300)
+    expect(lastFrame()).toContain('status:200')
+
+    // Verify the URL contains the query param
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][]
+    const url = calls[calls.length - 1][0]
+    expect(url).toContain('api_key=my-api-key')
   })
 })

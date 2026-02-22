@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Box, Text, useInput } from 'ink'
 import { Spinner } from '@inkjs/ui'
-import type { Endpoint, ServerInfo, ResponseTab } from '@/types/index.js'
+import type { Endpoint, ServerInfo, SecuritySchemeInfo, ResponseTab } from '@/types/index.js'
 import { METHOD_COLORS } from '@/utils/http-method.js'
 import { useRequestState } from '@/hooks/useRequestState.js'
 import { useScrollableList } from '@/hooks/useScrollableList.js'
@@ -11,11 +11,15 @@ interface Props {
   readonly endpoint: Endpoint | null
   readonly isFocused: boolean
   readonly servers: readonly ServerInfo[]
+  readonly securitySchemes: readonly SecuritySchemeInfo[]
   readonly onTextCaptureChange?: (active: boolean) => void
 }
 
 type Row =
   | { readonly type: 'server'; readonly label: string }
+  | { readonly type: 'auth-toggle'; readonly label: string }
+  | { readonly type: 'auth-type'; readonly label: string }
+  | { readonly type: 'auth-field'; readonly label: string; readonly fieldKey: string }
   | { readonly type: 'param'; readonly label: string; readonly paramKey: string }
   | { readonly type: 'body-editor'; readonly label: string }
   | { readonly type: 'send'; readonly label: string }
@@ -31,10 +35,32 @@ const TAB_KEYS = new Map<string, ResponseTab>([
   ['3', 'headers'],
 ])
 
-function buildRows(endpoint: Endpoint): readonly Row[] {
+function buildRows(
+  endpoint: Endpoint,
+  authExpanded: boolean,
+  authMethod: 'bearer' | 'apiKey' | 'basic' | undefined,
+): readonly Row[] {
   const rows: Row[] = []
 
   rows.push({ type: 'server', label: 'Server' })
+  rows.push({ type: 'auth-toggle', label: 'Auth' })
+
+  if (authExpanded && authMethod) {
+    rows.push({ type: 'auth-type', label: 'Auth Type' })
+
+    switch (authMethod) {
+      case 'bearer':
+        rows.push({ type: 'auth-field', label: 'Token', fieldKey: 'token' })
+        break
+      case 'apiKey':
+        rows.push({ type: 'auth-field', label: 'Key', fieldKey: 'key' })
+        break
+      case 'basic':
+        rows.push({ type: 'auth-field', label: 'Username', fieldKey: 'username' })
+        rows.push({ type: 'auth-field', label: 'Password', fieldKey: 'password' })
+        break
+    }
+  }
 
   for (const param of endpoint.parameters) {
     if (param.location === 'path' || param.location === 'query' || param.location === 'header') {
@@ -90,20 +116,23 @@ function colorForJsonLine(line: string): string {
   return 'white'
 }
 
-export function RequestPanel({ endpoint, isFocused, servers, onTextCaptureChange }: Props) {
-  const state = useRequestState(endpoint)
+export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, onTextCaptureChange }: Props) {
+  const state = useRequestState(endpoint, securitySchemes)
   const [editingParam, setEditingParam] = useState<string | null>(null)
   const [editingBody, setEditingBody] = useState(false)
+  const [editingAuthField, setEditingAuthField] = useState<string | null>(null)
   const [editBuffer, setEditBuffer] = useState('')
 
+  const selectedOption = state.auth.availableOptions[state.auth.selectedOptionIndex % state.auth.availableOptions.length]
+
   const rows = useMemo(
-    () => (endpoint ? buildRows(endpoint) : []),
-    [endpoint],
+    () => (endpoint ? buildRows(endpoint, state.auth.authExpanded, selectedOption?.method) : []),
+    [endpoint, state.auth.authExpanded, selectedOption?.method],
   )
 
   const { cursorIndex, moveUp, moveDown, moveToTop, moveToBottom } = useScrollableList(rows.length)
 
-  const isTextCapturing = editingParam !== null || editingBody
+  const isTextCapturing = editingParam !== null || editingBody || editingAuthField !== null
 
   useEffect(() => {
     onTextCaptureChange?.(isTextCapturing)
@@ -113,11 +142,32 @@ export function RequestPanel({ endpoint, isFocused, servers, onTextCaptureChange
   useEffect(() => {
     setEditingParam(null)
     setEditingBody(false)
+    setEditingAuthField(null)
     setEditBuffer('')
   }, [endpoint])
 
   useInput(
     (input, key) => {
+      // Auth field editing mode
+      if (editingAuthField !== null) {
+        if (key.return || key.escape) {
+          if (key.return) {
+            state.auth.setAuthField(editingAuthField, editBuffer)
+          }
+          setEditingAuthField(null)
+          setEditBuffer('')
+          return
+        }
+        if (key.backspace || key.delete) {
+          setEditBuffer(prev => prev.slice(0, -1))
+          return
+        }
+        if (input && !key.ctrl && !key.meta) {
+          setEditBuffer(prev => prev + input)
+        }
+        return
+      }
+
       // Param editing mode
       if (editingParam !== null) {
         if (key.return || key.escape) {
@@ -178,6 +228,12 @@ export function RequestPanel({ endpoint, isFocused, servers, onTextCaptureChange
         return
       }
 
+      // Auth toggle
+      if (input === 'a') {
+        state.auth.toggleAuth()
+        return
+      }
+
       // Server cycle
       if (input === 'S') {
         state.cycleServer()
@@ -197,9 +253,23 @@ export function RequestPanel({ endpoint, isFocused, servers, onTextCaptureChange
         return
       }
 
-      // Enter: start editing param or trigger send
+      // Enter: context-dependent actions
       if (key.return) {
         const row = rows[cursorIndex]
+        if (row?.type === 'auth-toggle') {
+          state.auth.toggleAuth()
+          return
+        }
+        if (row?.type === 'auth-type') {
+          state.auth.cycleAuthOption()
+          return
+        }
+        if (row?.type === 'auth-field') {
+          const currentValue = getAuthFieldValue(row.fieldKey)
+          setEditingAuthField(row.fieldKey)
+          setEditBuffer(currentValue)
+          return
+        }
         if (row?.type === 'param') {
           setEditingParam(row.paramKey)
           setEditBuffer(state.paramValues.get(row.paramKey) ?? '')
@@ -223,6 +293,22 @@ export function RequestPanel({ endpoint, isFocused, servers, onTextCaptureChange
     },
     { isActive: isFocused && endpoint !== null },
   )
+
+  function getAuthFieldValue(fieldKey: string): string {
+    const creds = state.auth.credentials
+    switch (fieldKey) {
+      case 'token':
+        return creds.method === 'bearer' ? creds.token : ''
+      case 'key':
+        return creds.method === 'apiKey' ? creds.key : ''
+      case 'username':
+        return creds.method === 'basic' ? creds.username : ''
+      case 'password':
+        return creds.method === 'basic' ? creds.password : ''
+      default:
+        return ''
+    }
+  }
 
   if (!endpoint) {
     return (
@@ -256,6 +342,46 @@ export function RequestPanel({ endpoint, isFocused, servers, onTextCaptureChange
                   : `Server: ${currentServer ? resolveServerUrl(currentServer) : ''}`}
               </Text>
               {servers.length > 1 && <Text dimColor> (S to cycle)</Text>}
+            </Box>
+          )
+        }
+
+        if (row.type === 'auth-toggle') {
+          return (
+            <Box key="auth-toggle">
+              <Text inverse={isSelected} dimColor={!isFocused}>
+                {state.auth.authExpanded ? '[-]' : '[+]'} Auth: {selectedOption?.label ?? 'None'} (a)
+              </Text>
+            </Box>
+          )
+        }
+
+        if (row.type === 'auth-type') {
+          return (
+            <Box key="auth-type">
+              <Text inverse={isSelected} dimColor={!isFocused}>
+                Type: {selectedOption?.label ?? 'None'}
+              </Text>
+              <Text dimColor> (Enter to cycle)</Text>
+            </Box>
+          )
+        }
+
+        if (row.type === 'auth-field') {
+          const isEditing = editingAuthField === row.fieldKey
+          const isMasked = row.fieldKey === 'password'
+          const rawValue = isEditing ? editBuffer : getAuthFieldValue(row.fieldKey)
+          const displayValue = isMasked && !isEditing && rawValue ? '*'.repeat(rawValue.length) : rawValue
+
+          return (
+            <Box key={`auth-${row.fieldKey}`}>
+              <Text inverse={isSelected} dimColor={!isFocused}>
+                {row.label}: {isEditing ? (
+                  <Text color="cyan">{editBuffer}<Text color="yellow">|</Text></Text>
+                ) : (
+                  <Text>{displayValue || '<empty>'}</Text>
+                )}
+              </Text>
             </Box>
           )
         }

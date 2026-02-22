@@ -21,14 +21,14 @@ const mockServers: ServerInfo[] = [
 describe('RequestPanel', () => {
   it('shows "No endpoint selected" when no endpoint', () => {
     const { lastFrame } = render(
-      <RequestPanel endpoint={null} isFocused={false} servers={mockServers} />,
+      <RequestPanel endpoint={null} isFocused={false} servers={mockServers} securitySchemes={[]} />,
     )
     expect(lastFrame()).toContain('No endpoint selected')
   })
 
   it('shows endpoint info when selected', () => {
     const { lastFrame } = render(
-      <RequestPanel endpoint={mockEndpoint} isFocused={false} servers={mockServers} />,
+      <RequestPanel endpoint={mockEndpoint} isFocused={false} servers={mockServers} securitySchemes={[]} />,
     )
     expect(lastFrame()).toContain('GET')
     expect(lastFrame()).toContain('/pets')

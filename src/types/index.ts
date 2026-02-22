@@ -14,3 +14,4 @@ export type {
 export type { InputType, SpecFormat, LoadResult } from './loader.js'
 export type { ResponseTab, RequestOptions, HttpResponse } from './http.js'
 export { HttpRequestError } from './http.js'
+export type { AuthMethod, AuthOption, AuthCredentials, AuthState } from './auth.js'
