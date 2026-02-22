@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { Box, Text, useInput } from 'ink'
 import { Spinner } from '@inkjs/ui'
 import type { Endpoint, ServerInfo, SecuritySchemeInfo, ResponseTab } from '@/types/index.js'
@@ -121,7 +121,43 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
   const [editingParam, setEditingParam] = useState<string | null>(null)
   const [editingBody, setEditingBody] = useState(false)
   const [editingAuthField, setEditingAuthField] = useState<string | null>(null)
+
+  // Ref-backed edit buffer: ref is always current, state is debounced for display.
+  // Prevents render storm when terminals send pasted text character-by-character.
+  const editBufferRef = useRef('')
   const [editBuffer, setEditBuffer] = useState('')
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const scheduleFlush = useCallback(() => {
+    if (flushTimerRef.current === null) {
+      flushTimerRef.current = setTimeout(() => {
+        flushTimerRef.current = null
+        setEditBuffer(editBufferRef.current)
+      }, 16)
+    }
+  }, [])
+
+  const flushEditBuffer = useCallback(() => {
+    if (flushTimerRef.current !== null) {
+      clearTimeout(flushTimerRef.current)
+      flushTimerRef.current = null
+    }
+    setEditBuffer(editBufferRef.current)
+  }, [])
+
+  const initEditBuffer = useCallback((value: string) => {
+    editBufferRef.current = value
+    setEditBuffer(value)
+  }, [])
+
+  // Cleanup flush timer on unmount
+  useEffect(() => {
+    return () => {
+      if (flushTimerRef.current !== null) {
+        clearTimeout(flushTimerRef.current)
+      }
+    }
+  }, [])
 
   const selectedOption = state.auth.availableOptions[state.auth.selectedOptionIndex % state.auth.availableOptions.length]
 
@@ -143,27 +179,30 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
     setEditingParam(null)
     setEditingBody(false)
     setEditingAuthField(null)
-    setEditBuffer('')
-  }, [endpoint])
+    initEditBuffer('')
+  }, [endpoint, initEditBuffer])
 
   useInput(
     (input, key) => {
       // Auth field editing mode
       if (editingAuthField !== null) {
         if (key.return || key.escape) {
+          flushEditBuffer()
           if (key.return) {
-            state.auth.setAuthField(editingAuthField, editBuffer)
+            state.auth.setAuthField(editingAuthField, editBufferRef.current)
           }
           setEditingAuthField(null)
-          setEditBuffer('')
+          initEditBuffer('')
           return
         }
         if (key.backspace || key.delete) {
-          setEditBuffer(prev => prev.slice(0, -1))
+          editBufferRef.current = editBufferRef.current.slice(0, -1)
+          scheduleFlush()
           return
         }
         if (input && !key.ctrl && !key.meta) {
-          setEditBuffer(prev => prev + input)
+          editBufferRef.current += input
+          scheduleFlush()
         }
         return
       }
@@ -171,19 +210,22 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
       // Param editing mode
       if (editingParam !== null) {
         if (key.return || key.escape) {
+          flushEditBuffer()
           if (key.return) {
-            state.setParamValue(editingParam, editBuffer)
+            state.setParamValue(editingParam, editBufferRef.current)
           }
           setEditingParam(null)
-          setEditBuffer('')
+          initEditBuffer('')
           return
         }
         if (key.backspace || key.delete) {
-          setEditBuffer(prev => prev.slice(0, -1))
+          editBufferRef.current = editBufferRef.current.slice(0, -1)
+          scheduleFlush()
           return
         }
         if (input && !key.ctrl && !key.meta) {
-          setEditBuffer(prev => prev + input)
+          editBufferRef.current += input
+          scheduleFlush()
         }
         return
       }
@@ -191,21 +233,25 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
       // Body editing mode
       if (editingBody) {
         if (key.escape) {
-          state.setBodyText(editBuffer)
-          state.validateBody(editBuffer)
+          flushEditBuffer()
+          state.setBodyText(editBufferRef.current)
+          state.validateBody(editBufferRef.current)
           setEditingBody(false)
           return
         }
         if (key.return) {
-          setEditBuffer(prev => prev + '\n')
+          editBufferRef.current += '\n'
+          scheduleFlush()
           return
         }
         if (key.backspace || key.delete) {
-          setEditBuffer(prev => prev.slice(0, -1))
+          editBufferRef.current = editBufferRef.current.slice(0, -1)
+          scheduleFlush()
           return
         }
         if (input && !key.ctrl && !key.meta) {
-          setEditBuffer(prev => prev + input)
+          editBufferRef.current += input
+          scheduleFlush()
         }
         return
       }
@@ -267,12 +313,12 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
         if (row?.type === 'auth-field') {
           const currentValue = getAuthFieldValue(row.fieldKey)
           setEditingAuthField(row.fieldKey)
-          setEditBuffer(currentValue)
+          initEditBuffer(currentValue)
           return
         }
         if (row?.type === 'param') {
           setEditingParam(row.paramKey)
-          setEditBuffer(state.paramValues.get(row.paramKey) ?? '')
+          initEditBuffer(state.paramValues.get(row.paramKey) ?? '')
           return
         }
         if (row?.type === 'send') {
@@ -286,7 +332,7 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
         const row = rows[cursorIndex]
         if (row?.type === 'body-editor') {
           setEditingBody(true)
-          setEditBuffer(state.bodyText)
+          initEditBuffer(state.bodyText)
           return
         }
       }

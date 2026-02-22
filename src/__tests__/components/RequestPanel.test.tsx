@@ -639,6 +639,78 @@ describe('RequestPanel - auth toggle', () => {
     expect(lastFrame()).not.toContain('sec')
   })
 
+  test('pasting a long JWT token into auth field works without freezing', async () => {
+    const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U'
+
+    const { lastFrame, stdin } = render(
+      <RequestPanel endpoint={makeEndpoint()} isFocused={true} servers={defaultServers} securitySchemes={[]} />,
+    )
+    await delay(50)
+
+    // Open auth, navigate to token field, enter edit mode
+    stdin.write('a')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('\r')
+    await delay(50)
+
+    // Simulate paste: write entire JWT as one chunk (best case)
+    stdin.write(jwt)
+    await delay(100)
+
+    // Should display the full JWT
+    expect(lastFrame()).toContain('eyJhbGci')
+
+    // Commit with Enter
+    stdin.write('\r')
+    await delay(50)
+
+    // Should show the committed value
+    expect(lastFrame()).toContain('eyJhbGci')
+  })
+
+  test('pasting JWT char-by-char (worst case terminal) still commits correctly', async () => {
+    const jwt = 'eyJhbGciOiJIUzI1Ni.test'
+
+    const { lastFrame, stdin } = render(
+      <RequestPanel endpoint={makeEndpoint()} isFocused={true} servers={defaultServers} securitySchemes={[]} />,
+    )
+    await delay(50)
+
+    // Open auth, navigate to token field, enter edit mode
+    stdin.write('a')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('\r')
+    await delay(50)
+
+    // Simulate worst-case paste: char by char with no delay
+    for (const ch of jwt) {
+      stdin.write(ch)
+    }
+    await delay(100)
+
+    // Should display the full pasted text
+    expect(lastFrame()).toContain('eyJhbGci')
+
+    // Commit with Enter
+    stdin.write('\r')
+    await delay(50)
+
+    // Value should be committed (visible as non-editing display)
+    expect(lastFrame()).toContain('eyJhbGci')
+  })
+
   test('auth toggle notifies text capture guard', async () => {
     const onCapture = mock((_active: boolean) => {})
 
