@@ -85,7 +85,7 @@ export function EndpointDetail({ endpoint, isFocused, componentSchemas }: Props)
     (input, key) => {
       // Schema view navigation
       if (schemaNav.currentView === 'schema') {
-        if (key.escape || input === 'h') {
+        if (key.escape || key.backspace || key.delete || input === 'h') {
           schemaNav.pop()
           return
         }
