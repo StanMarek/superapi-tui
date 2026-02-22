@@ -23,6 +23,7 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@inkjs/ui": "^2.0.0",
     "@scalar/openapi-parser": "^0.24.13",
     "ajv": "^8.18.0",
     "ink": "^6.8.0",
