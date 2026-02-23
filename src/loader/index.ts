@@ -31,7 +31,9 @@ async function fetchConfigSpecUrl(configUrl: string): Promise<string | null> {
     const configResult = await loadFromUrl(configUrl)
     const config = parseSwaggerConfig(configResult.content, configUrl)
     return resolveSpecUrlFromConfig(config)
-  } catch {
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    console.warn(`superapi-tui: failed to fetch config from ${configUrl}: ${detail}`)
     return null
   }
 }
@@ -61,13 +63,16 @@ async function resolveSwaggerUiSpec(html: string, pageUrl: string): Promise<stri
       if (scriptConfigUrl) {
         const specUrl = await fetchConfigSpecUrl(scriptConfigUrl)
         if (specUrl) return specUrl
+        // configUrl was present but unresolved — skip url fallback to avoid petstore default
+        continue
       }
 
-      // 3b. Direct URL in external script
+      // 3b. Direct URL in external script (only if no configUrl was found)
       const scriptSpecUrl = extractSpecUrl(scriptResult.content, pageUrl)
       if (scriptSpecUrl) return scriptSpecUrl
-    } catch {
-      // Script fetch failed — continue to next
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      console.warn(`superapi-tui: failed to process script ${scriptUrl}: ${detail}`)
     }
   }
 

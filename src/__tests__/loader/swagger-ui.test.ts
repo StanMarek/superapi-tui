@@ -44,6 +44,11 @@ describe('extractSpecUrl', () => {
   test('returns null when no spec URL found', () => {
     expect(extractSpecUrl('<html><body>Hello</body></html>', 'https://example.com')).toBeNull()
   })
+
+  test('does not false-match configUrl as url', () => {
+    const html = `<script>SwaggerUIBundle({ configUrl: "/v3/api-docs/swagger-config", dom_id: '#swagger-ui' })</script>`
+    expect(extractSpecUrl(html, 'https://example.com/')).toBeNull()
+  })
 })
 
 describe('extractConfigUrl', () => {
@@ -184,6 +189,18 @@ describe('parseSwaggerConfig', () => {
     const json = JSON.stringify({ url: 'https://api.example.com/v3/docs' })
     const config = parseSwaggerConfig(json, 'https://example.com/config')
     expect(config.url).toBe('https://api.example.com/v3/docs')
+  })
+
+  test('throws for null JSON', () => {
+    expect(() => parseSwaggerConfig('null', 'https://example.com/')).toThrow('JSON object')
+  })
+
+  test('throws for array JSON', () => {
+    expect(() => parseSwaggerConfig('[]', 'https://example.com/')).toThrow('JSON object')
+  })
+
+  test('throws for string JSON', () => {
+    expect(() => parseSwaggerConfig('"hello"', 'https://example.com/')).toThrow('JSON object')
   })
 })
 

@@ -8,8 +8,8 @@ export function isSwaggerUiPage(content: string): boolean {
 }
 
 const SPEC_URL_PATTERNS = [
-  /SwaggerUIBundle\(\s*\{[^}]*url\s*:\s*["']([^"']+)["']/s,
-  /SwaggerUIBundle\(\s*\{[^}]*url\s*:\s*`([^`]+)`/s,
+  /SwaggerUIBundle\(\s*\{[^}]*[,{\s]url\s*:\s*["']([^"']+)["']/s,
+  /SwaggerUIBundle\(\s*\{[^}]*[,{\s]url\s*:\s*`([^`]+)`/s,
   /spec-url\s*=\s*["']([^"']+)["']/,
 ]
 
@@ -38,18 +38,15 @@ export function extractConfigUrl(content: string, baseUrl: string): string | nul
   return null
 }
 
-const SCRIPT_SRC_PATTERN = /<script[^>]+src\s*=\s*["']([^"']+)["'][^>]*>/gi
-
 export function extractExternalScriptUrls(html: string, baseUrl: string): readonly string[] {
+  const pattern = /<script[^>]+src\s*=\s*["']([^"']+)["'][^>]*>/gi
   const urls: string[] = []
   let match: RegExpExecArray | null
-  while ((match = SCRIPT_SRC_PATTERN.exec(html)) !== null) {
+  while ((match = pattern.exec(html)) !== null) {
     if (match[1]) {
       urls.push(resolveUrl(match[1], baseUrl))
     }
   }
-  // Reset regex state for next call
-  SCRIPT_SRC_PATTERN.lastIndex = 0
   return urls
 }
 
@@ -69,15 +66,19 @@ interface SwaggerConfig {
 }
 
 export function parseSwaggerConfig(json: string, baseUrl: string): SwaggerConfig {
-  const raw = JSON.parse(json) as Record<string, unknown>
+  const raw: unknown = JSON.parse(json)
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error(`Swagger config must be a JSON object, got: ${raw === null ? 'null' : typeof raw}`)
+  }
+  const obj = raw as Record<string, unknown>
   const result: { url?: string; urls?: { url: string; name?: string }[] } = {}
 
-  if (typeof raw.url === 'string') {
-    result.url = resolveUrl(raw.url, baseUrl)
+  if (typeof obj.url === 'string') {
+    result.url = resolveUrl(obj.url, baseUrl)
   }
 
-  if (Array.isArray(raw.urls)) {
-    result.urls = raw.urls
+  if (Array.isArray(obj.urls)) {
+    result.urls = obj.urls
       .filter((entry): entry is Record<string, unknown> => entry != null && typeof entry === 'object')
       .filter((entry) => typeof entry.url === 'string')
       .map((entry) => ({

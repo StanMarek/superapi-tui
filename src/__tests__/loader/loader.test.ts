@@ -181,4 +181,41 @@ window.ui = SwaggerUIBundle({
     expect(result.content).toBe(specContent)
     expect(result.resolvedUrl).toBe('https://app.example.com/v3/api-docs/direct')
   })
+
+  test('skips url fallback when configUrl present but unresolved in external script', async () => {
+    const pageUrl = 'https://app.example.com/swagger-ui/index.html'
+
+    // HTML has no inline url/configUrl — only external script
+    const swaggerHtml = `<!DOCTYPE html>
+<html>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="/swagger-initializer.js"></script>
+</body>
+</html>`
+
+    // External script has both configUrl and a petstore url default
+    // Config endpoint fails (404) — should NOT fall back to petstore url
+    const initializerJs = `
+window.ui = SwaggerUIBundle({
+  url: "https://petstore.swagger.io/v2/swagger.json",
+  configUrl: "/v3/api-docs/swagger-config",
+  dom_id: '#swagger-ui'
+});`
+
+    globalThis.fetch = mock((url: string | URL | Request) => {
+      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url
+      if (urlStr === pageUrl) {
+        return Promise.resolve(new Response(swaggerHtml, { status: 200 }))
+      }
+      if (urlStr === 'https://app.example.com/swagger-initializer.js') {
+        return Promise.resolve(new Response(initializerJs, { status: 200 }))
+      }
+      // Config endpoint returns 404
+      return Promise.resolve(new Response('Not Found', { status: 404 }))
+    }) as unknown as typeof fetch
+
+    // Should fail rather than loading petstore
+    await expect(loadSpec(pageUrl)).rejects.toBeInstanceOf(SpecLoadError)
+  })
 })
