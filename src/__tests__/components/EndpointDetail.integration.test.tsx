@@ -104,81 +104,79 @@ const testSpec: ParsedSpec = {
   ]),
 }
 
+// Helper: expand tag group, select first endpoint
+async function selectFirstEndpoint(stdin: { write: (s: string) => void }) {
+  // Expand tag group (collapsed by default)
+  stdin.write('\r')
+  await delay(50)
+  // Move to first endpoint
+  stdin.write('j')
+  await delay(50)
+  // Select it
+  stdin.write('\r')
+  await delay(50)
+}
+
+// Helper: expand tag group, select second endpoint
+async function selectSecondEndpoint(stdin: { write: (s: string) => void }) {
+  stdin.write('\r')
+  await delay(50)
+  stdin.write('j')
+  await delay(50)
+  stdin.write('j')
+  await delay(50)
+  stdin.write('\r')
+  await delay(50)
+}
+
 describe('EndpointDetail Integration', () => {
   it('selecting an endpoint in the list updates the detail panel', async () => {
     const { lastFrame, stdin } = render(<App spec={testSpec} />)
 
-    // Endpoint list is focused by default. Cursor starts at index 0 (tag header "pets").
-    // Press j to move to first endpoint row (GET /pets) at index 1.
-    stdin.write('j')
-    await delay(50)
-    // Press Enter to select the endpoint
-    stdin.write('\r')
-    await delay(50)
+    await selectFirstEndpoint(stdin)
 
     const frame = lastFrame()!
     // Detail panel should now show the selected endpoint's method and path
     expect(frame).toContain('GET')
     expect(frame).toContain('/pets')
-    // Parameters section should be visible with the limit parameter
+    // Parameters section header should be visible (collapsed)
     expect(frame).toContain('Parameters')
-    expect(frame).toContain('limit')
   })
 
   it('Tab to detail panel and navigate sections', async () => {
     const { lastFrame, stdin } = render(<App spec={testSpec} />)
 
-    // Select an endpoint first: j to move to GET /pets, Enter to select
-    stdin.write('j')
-    await delay(50)
-    stdin.write('\r')
-    await delay(50)
+    await selectFirstEndpoint(stdin)
 
     // Tab to detail panel
     stdin.write('\t')
     await delay(50)
 
-    // Detail panel should show sections for the selected endpoint
+    // Detail panel should show section headers for the selected endpoint
     const frame = lastFrame()!
     expect(frame).toContain('Parameters')
     expect(frame).toContain('Responses')
   })
 
-  it('shows request body section when POST endpoint is selected', async () => {
+  it('shows request body section header when POST endpoint is selected', async () => {
     const { lastFrame, stdin } = render(<App spec={testSpec} />)
 
-    // Navigate to the POST /pets endpoint (index 2: tag header=0, GET /pets=1, POST /pets=2)
-    stdin.write('j')
-    await delay(50)
-    stdin.write('j')
-    await delay(50)
-    // Select POST /pets
-    stdin.write('\r')
-    await delay(50)
+    await selectSecondEndpoint(stdin)
 
     const frame = lastFrame()!
-    // Detail panel should show request body section
     expect(frame).toContain('POST')
     expect(frame).toContain('/pets')
+    // Section header should be visible (collapsed)
     expect(frame).toContain('Request Body')
-    expect(frame).toContain('required')
-    expect(frame).toContain('application/json')
   })
 
-  it('shows response information for selected endpoint', async () => {
+  it('shows response section header for selected endpoint', async () => {
     const { lastFrame, stdin } = render(<App spec={testSpec} />)
 
-    // Select GET /pets
-    stdin.write('j')
-    await delay(50)
-    stdin.write('\r')
-    await delay(50)
+    await selectFirstEndpoint(stdin)
 
     const frame = lastFrame()!
-    // Responses section should show status codes and descriptions
     expect(frame).toContain('Responses')
-    expect(frame).toContain('200')
-    expect(frame).toContain('A list of pets')
   })
 
   it('detail panel shows "No endpoint selected" before any selection', () => {
@@ -190,82 +188,58 @@ describe('EndpointDetail Integration', () => {
   it('request panel updates when an endpoint is selected', async () => {
     const { lastFrame, stdin } = render(<App spec={testSpec} />)
 
-    // Select GET /pets
-    stdin.write('j')
-    await delay(50)
-    stdin.write('\r')
-    await delay(50)
+    await selectFirstEndpoint(stdin)
 
     const frame = lastFrame()!
-    // Request panel should also reflect the selected endpoint
-    // The RequestPanel shows method and path for the selected endpoint
-    // There should be at least 2 occurrences of "GET" (endpoint list + request panel or detail)
     expect(frame).toContain('Request / Response')
     expect(frame).not.toContain('No endpoint selected')
   })
 
-  it('collapsing a section in the detail panel hides its content', async () => {
+  it('expanding then collapsing a section in the detail panel', async () => {
     const { lastFrame, stdin } = render(<App spec={testSpec} />)
 
-    // Select GET /pets
-    stdin.write('j')
-    await delay(50)
-    stdin.write('\r')
-    await delay(50)
-
-    // Verify parameter content is shown initially
-    let frame = lastFrame()!
-    expect(frame).toContain('limit')
+    await selectFirstEndpoint(stdin)
 
     // Tab to detail panel
     stdin.write('\t')
     await delay(50)
 
-    // Cursor starts at first row (Parameters header). Press Enter to collapse.
+    // Sections are collapsed by default — expand Parameters
     stdin.write('\r')
     await delay(50)
+    expect(lastFrame()!).toContain('limit')
 
-    frame = lastFrame()!
-    // After collapsing Parameters, the detail panel's expanded parameter info should be hidden
-    // The collapsed indicator should appear
-    expect(frame).toContain('\u25b6') // collapsed arrow
-    // The detail panel's ParameterList renders "Query Parameters" as a group header —
-    // this should disappear when collapsed (request panel uses "query:limit" format instead)
-    expect(frame).not.toContain('Query Parameters')
+    // Collapse again
+    stdin.write('\r')
+    await delay(50)
+    expect(lastFrame()!).toContain('\u25b6') // collapsed arrow
+    expect(lastFrame()!).not.toContain('Query Parameters')
   })
 
   it('switching endpoint selection updates the detail panel', async () => {
     const { lastFrame, stdin } = render(<App spec={testSpec} />)
 
-    // Select GET /pets first
-    stdin.write('j')
-    await delay(50)
-    stdin.write('\r')
-    await delay(50)
+    await selectFirstEndpoint(stdin)
 
     let frame = lastFrame()!
     expect(frame).toContain('Parameters')
-    expect(frame).toContain('limit')
 
-    // Now select POST /pets (move down and select)
+    // Select POST /pets (move down and select)
     stdin.write('j')
     await delay(50)
     stdin.write('\r')
     await delay(50)
 
     frame = lastFrame()!
-    // Detail panel should now show POST /pets details
+    // Detail panel should now show POST /pets details (section headers collapsed)
     expect(frame).toContain('Request Body')
-    // POST /pets has no parameters, so the Parameters section should not appear
-    expect(frame).not.toContain('limit')
+    // POST /pets has no parameters, so Parameters section should not appear
+    expect(frame).not.toContain('Parameters')
   })
 
   it('panel focus indicator changes with Tab navigation', async () => {
     const { lastFrame, stdin } = render(<App spec={testSpec} />)
 
-    // Initially endpoint list panel should be focused
-    // We can verify by checking the panel title dimColor behavior
-    // but the most reliable check is that the endpoint list renders with focus
     let frame = lastFrame()!
     expect(frame).toContain('Endpoints')
     expect(frame).toContain('Endpoint Detail')
@@ -279,7 +253,6 @@ describe('EndpointDetail Integration', () => {
     await delay(50)
 
     frame = lastFrame()!
-    // All three panels should still be present
     expect(frame).toContain('Endpoints')
     expect(frame).toContain('Endpoint Detail')
     expect(frame).toContain('Request / Response')
@@ -288,30 +261,32 @@ describe('EndpointDetail Integration', () => {
   it('Shift+Tab cycles focus backwards', async () => {
     const { lastFrame, stdin } = render(<App spec={testSpec} />)
 
-    // Start at endpoints panel, Shift+Tab should go to request panel (wraps around)
     stdin.write('\x1b[Z') // Shift+Tab escape sequence
     await delay(50)
 
     const frame = lastFrame()!
-    // All panels should still be visible
     expect(frame).toContain('Endpoints')
     expect(frame).toContain('Endpoint Detail')
     expect(frame).toContain('Request / Response')
   })
 
-  it('shows schema details in response section', async () => {
+  it('shows schema ref name in response section header after expanding', async () => {
     const { lastFrame, stdin } = render(<App spec={testSpec} />)
 
-    // Select POST /pets which has a Pet schema in the response
+    await selectSecondEndpoint(stdin)
+
+    // Tab to detail panel
+    stdin.write('\t')
+    await delay(50)
+
+    // Navigate to Responses header (skip Request Body header)
     stdin.write('j')
     await delay(50)
-    stdin.write('j')
-    await delay(50)
+    // Expand Responses
     stdin.write('\r')
     await delay(50)
 
     const frame = lastFrame()!
-    // The response 201 should show Pet schema properties
     expect(frame).toContain('201')
     expect(frame).toContain('Pet created')
     expect(frame).toContain('Pet')

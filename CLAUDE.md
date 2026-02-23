@@ -67,7 +67,7 @@ CLI entry point compiles to `./dist/cli.js`. The `bin` field in package.json map
 ### Key Modules
 
 - **CLI Handler** — Parses arguments (file path or URL)
-- **Spec Loader** — Loads OpenAPI specs from local files (YAML/JSON), direct URLs, or Swagger UI URLs (auto-detects and extracts spec URL)
+- **Spec Loader** — Loads OpenAPI specs from local files (YAML/JSON), direct URLs, or Swagger UI URLs. Swagger UI resolution uses a fallback chain: inline `url:` → inline `configUrl:` → same-origin external scripts (`configUrl` before `url` to avoid petstore defaults)
 - **Spec Parser** — Validates and structures OpenAPI v3.0/v3.1 data
 - **TUI Components** — Ink/React components for each panel
 - **HTTP Client** — Sends requests to endpoints using selected server + auth
@@ -79,7 +79,7 @@ CLI entry point compiles to `./dist/cli.js`. The `bin` field in package.json map
 - **Types:** `src/types/` — All domain types (SchemaInfo, Endpoint, ParsedSpec, etc.) with barrel export from `index.ts`
 - **Utils:** `src/utils/` — url, http-method, yaml helpers with barrel export
 - **Loader:** `src/loader/` — `loadSpec(input)` handles files, URLs, Swagger UI auto-detection. Returns `LoadResult`
-- **Parser:** `src/parser/` — `parseSpec(content)` validates with @scalar/openapi-parser, resolves $refs, transforms to `ParsedSpec`
+- **Parser:** `src/parser/` — `parseSpec(content)` leniently validates with @scalar/openapi-parser (warnings logged, not thrown), resolves $refs, transforms to `ParsedSpec`
 - Pipeline: `loadSpec(input) → parseSpec(result.content) → ParsedSpec`
 
 ### TUI Components
@@ -88,8 +88,8 @@ CLI entry point compiles to `./dist/cli.js`. The `bin` field in package.json map
 - **Navigation state:** `useNavigation` manages `fullscreenPanel` (PanelId | null) and `showHelp` (boolean). Input priority chain: textCapture → help overlay → `?` → quit → Esc-fullscreen → `f` → Tab
 - **HelpOverlay:** `src/components/HelpOverlay.tsx` — stateless overlay with keybinding sections, dismissed via `?` or `Esc`
 - **Panel types:** `PanelId = 'endpoints' | 'detail' | 'request'` — panels get `isFocused` prop, borders cyan when focused
-- **EndpointList:** Flat `ListRow` discriminated union model for cursor navigation, collapsible tag groups, `/` filter mode
-- **EndpointDetail:** Collapsible sections (Parameters, Request Body, Responses) with `sectionHeader`/`content` row model. Sub-components: `ParameterList`, `SchemaView` (recursive, self-managed cursor), `ResponseList`. Schema drill-down via `useSchemaNavigation` hook.
+- **EndpointList:** Flat `ListRow` discriminated union model for cursor navigation, collapsible tag groups (collapsed by default), `/` filter mode
+- **EndpointDetail:** Collapsible sections (Parameters, Request Body, Responses — collapsed by default, re-collapse on endpoint change) with `sectionHeader`/`content` row model. Sub-components: `ParameterList`, `SchemaView` (recursive, self-managed cursor), `ResponseList`. Schema drill-down via `useSchemaNavigation` hook.
 - **RequestPanel:** Row model (`server` → `auth-toggle` → [`auth-type` → `auth-field`...] → `param` → `body-editor` → `send` → `response-tabs` → `response-content`). Discriminated union `Row` type. State managed by `useRequestState` hook. Inline param/body/auth-field editing with text capture guard. Response viewer with Pretty/Raw/Headers tabs. Auth section is collapsible (`a` key), with type cycling and credential fields (bearer token, apiKey key, basic username/password).
 - **Launcher:** `src/components/Launcher.tsx` — pre-app interactive screen. Loads config via `loadConfig()` directly (no hook). State machine: `loading` → `select` (saved servers) or `url-input` (manual entry). Uses `Select`/`TextInput` from `@inkjs/ui`
 - **SpecLoader:** Phases: `launcher` (no input) → `loading` (spec input chosen) → `loaded` | `error`. Derived `specInputForLoad` triggers load effect without re-firing on message updates
@@ -147,6 +147,7 @@ Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), 
 - Integration tests importing `App.tsx` may show "File not found" in parallel runs — run individually with `bun test <file>`
 - `mock.module()` leaks across parallel test files — if a test file mocks `@/config/index.js`, other files importing that module may get the mock. Tests pass individually; parallel failures from this are expected
 - Escape sequences: Escape=`\x1b`, Shift+Tab=`\x1b[Z`, Tab=`\t`
+- Integration tests with collapsed-by-default: to select an endpoint, must first expand the tag group (`Enter` → `j` → `Enter`), not just navigate and select (`j` → `Enter`)
 
 ### Hook Testing
 
@@ -181,6 +182,7 @@ Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), 
 - Ink paste handling: use ref-backed edit buffer with debounced state sync (16ms) to prevent render storms — terminals may send paste char-by-char, causing one setState + re-render per character
 - Auth injection safety: `applyAuth` must skip setting headers/params when credential values are empty — sending `Authorization: Bearer ` (empty token) causes 401s
 - Overlay input isolation: when showing overlays (help, etc.), gate `isFocused` with `&& !showOverlay` — Ink `display="none"` hides rendering but `useInput({ isActive: isFocused })` still fires if `isFocused` is true
+- Collapsed-by-default pattern: initialize `useState` with lazy initializer `useState(() => new Set(items.map(...)))` and mirror the same default in `useEffect` reset handlers when props change
 
 ## Design Decisions
 

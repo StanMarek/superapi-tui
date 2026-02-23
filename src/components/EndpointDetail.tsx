@@ -38,9 +38,11 @@ function buildSections(endpoint: Endpoint): readonly Section[] {
 
 export function EndpointDetail({ endpoint, isFocused, componentSchemas, onTextCaptureChange }: Props) {
   const schemaNav = useSchemaNavigation()
-  const [collapsedSections, setCollapsedSections] = useState<ReadonlySet<SectionId>>(new Set())
-
   const sections = useMemo(() => (endpoint ? buildSections(endpoint) : []), [endpoint])
+
+  const [collapsedSections, setCollapsedSections] = useState<ReadonlySet<SectionId>>(
+    () => new Set(sections.map(s => s.id)),
+  )
 
   // Build flat row model for cursor navigation
   // Each row is either a section header or a content indicator
@@ -57,11 +59,11 @@ export function EndpointDetail({ endpoint, isFocused, componentSchemas, onTextCa
 
   const { cursorIndex, moveUp, moveDown, moveToTop, moveToBottom } = useScrollableList(rows.length)
 
-  // Reset schema navigation and collapsed sections when endpoint changes
+  // Reset schema navigation and collapse all sections when endpoint changes
   useEffect(() => {
     schemaNav.reset()
-    setCollapsedSections(new Set())
-  }, [endpoint])
+    setCollapsedSections(new Set(sections.map(s => s.id)))
+  }, [endpoint, sections])
 
   // Suppress global keybindings (q quit) when in schema drill-down view
   useEffect(() => {

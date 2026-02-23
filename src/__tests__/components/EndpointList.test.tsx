@@ -71,18 +71,18 @@ describe('EndpointList', () => {
       expect(frame).toContain('store')
     })
 
-    it('renders endpoint paths with HTTP methods', () => {
+    it('starts with all groups collapsed', () => {
       const onSelect = mock(() => {})
       const { lastFrame } = render(
         <EndpointList tagGroups={tagGroups} isFocused={false} onSelectEndpoint={onSelect} />,
       )
       const frame = lastFrame()!
-      expect(frame).toContain('GET')
-      expect(frame).toContain('/pets')
-      expect(frame).toContain('POST')
-      expect(frame).toContain('DELETE')
-      expect(frame).toContain('/pets/{petId}')
-      expect(frame).toContain('/store/inventory')
+      // All tags collapsed by default — right-pointing triangle
+      expect(frame).toContain('\u25B6') // ▶
+      expect(frame).not.toContain('\u25BC') // no ▼
+      // Endpoint paths should NOT be visible
+      expect(frame).not.toContain('/pets')
+      expect(frame).not.toContain('/store/inventory')
     })
 
     it('renders endpoint count in tag headers', () => {
@@ -96,14 +96,23 @@ describe('EndpointList', () => {
       expect(frame).toContain('(1)')
     })
 
-    it('shows expand indicator on tag headers', () => {
+    it('shows endpoint paths after expanding a group', async () => {
       const onSelect = mock(() => {})
-      const { lastFrame } = render(
-        <EndpointList tagGroups={tagGroups} isFocused={false} onSelectEndpoint={onSelect} />,
+      const { lastFrame, stdin } = render(
+        <EndpointList tagGroups={tagGroups} isFocused={true} onSelectEndpoint={onSelect} />,
       )
+      // Cursor starts on pets tag header (collapsed)
+      // Press Enter to expand
+      stdin.write('\r')
+      await delay(50)
       const frame = lastFrame()!
-      // All tags expanded by default, so we should see the down-pointing triangle
-      expect(frame).toContain('\u25BC') // ▼
+      expect(frame).toContain('GET')
+      expect(frame).toContain('/pets')
+      expect(frame).toContain('POST')
+      expect(frame).toContain('DELETE')
+      expect(frame).toContain('/pets/{petId}')
+      // Store is still collapsed
+      expect(frame).not.toContain('/store/inventory')
     })
   })
 
@@ -113,16 +122,12 @@ describe('EndpointList', () => {
       const { lastFrame, stdin } = render(
         <EndpointList tagGroups={tagGroups} isFocused={true} onSelectEndpoint={onSelect} />,
       )
-      // Initial cursor is at index 0 (pets tag header)
-      // Press j to move to first endpoint
+      // Initial cursor is at index 0 (pets tag header, collapsed)
+      // Press j to move to store tag header
       stdin.write('j')
       await delay(50)
       const frame = lastFrame()!
-      // The cursor should now be on the first endpoint row (GET /pets)
-      // We verify by checking that the endpoint row has inverse styling
-      // Since we can't easily check styling, we verify frame still has content
-      expect(frame).toContain('GET')
-      expect(frame).toContain('/pets')
+      expect(frame).toContain('store')
     })
 
     it('moves cursor up with k', async () => {
@@ -144,12 +149,11 @@ describe('EndpointList', () => {
       const { lastFrame, stdin } = render(
         <EndpointList tagGroups={tagGroups} isFocused={true} onSelectEndpoint={onSelect} />,
       )
-      // Jump to bottom
+      // Jump to bottom — with all collapsed, bottom is store tag header
       stdin.write('G')
       await delay(50)
       let frame = lastFrame()!
-      // Bottom item is store's endpoint: GET /store/inventory
-      expect(frame).toContain('/store/inventory')
+      expect(frame).toContain('store')
 
       // Jump to top
       stdin.write('g')
@@ -158,19 +162,37 @@ describe('EndpointList', () => {
       expect(frame).toContain('pets')
     })
 
-    it('collapses tag group with Enter on tag header', async () => {
+    it('expands tag group with Enter on collapsed tag header', async () => {
       const onSelect = mock(() => {})
       const { lastFrame, stdin } = render(
         <EndpointList tagGroups={tagGroups} isFocused={true} onSelectEndpoint={onSelect} />,
       )
-      // Cursor starts on pets tag header (index 0)
-      // Press Enter to collapse
+      // Cursor starts on pets tag header (collapsed by default)
+      // Press Enter to expand
       stdin.write('\r')
       await delay(50)
       const frame = lastFrame()!
-      // After collapsing pets, we should see the right-pointing triangle
+      // After expanding pets, we should see the down-pointing triangle
+      expect(frame).toContain('\u25BC') // ▼
+      // The pets endpoints should be visible
+      expect(frame).toContain('/pets')
+    })
+
+    it('collapses expanded tag group with Enter', async () => {
+      const onSelect = mock(() => {})
+      const { lastFrame, stdin } = render(
+        <EndpointList tagGroups={tagGroups} isFocused={true} onSelectEndpoint={onSelect} />,
+      )
+      // Expand first
+      stdin.write('\r')
+      await delay(50)
+      expect(lastFrame()!).toContain('/pets')
+
+      // Collapse again
+      stdin.write('\r')
+      await delay(50)
+      const frame = lastFrame()!
       expect(frame).toContain('\u25B6') // ▶
-      // The pets endpoints should NOT be visible
       expect(frame).not.toContain('/pets')
     })
 
@@ -179,7 +201,10 @@ describe('EndpointList', () => {
       const { stdin } = render(
         <EndpointList tagGroups={tagGroups} isFocused={true} onSelectEndpoint={onSelect} />,
       )
-      // Move to first endpoint (index 1, GET /pets)
+      // Expand pets group first (Enter on collapsed tag header)
+      stdin.write('\r')
+      await delay(50)
+      // Move to first endpoint (j from tag header to GET /pets)
       stdin.write('j')
       await delay(50)
       // Press Enter to select
@@ -190,25 +215,25 @@ describe('EndpointList', () => {
       expect((onSelect.mock.calls as any)[0][0]).toEqual(petEndpoints[0])
     })
 
-    it('collapses with h and expands with l', async () => {
+    it('expands with l and collapses with h', async () => {
       const onSelect = mock(() => {})
       const { lastFrame, stdin } = render(
         <EndpointList tagGroups={tagGroups} isFocused={true} onSelectEndpoint={onSelect} />,
       )
-      // Cursor is on pets tag header
-      // Press h to collapse
-      stdin.write('h')
-      await delay(50)
-      let frame = lastFrame()!
-      expect(frame).toContain('\u25B6') // ▶ collapsed
-      expect(frame).not.toContain('/pets')
-
+      // Cursor is on pets tag header (collapsed by default)
       // Press l to expand
       stdin.write('l')
       await delay(50)
-      frame = lastFrame()!
+      let frame = lastFrame()!
       expect(frame).toContain('\u25BC') // ▼ expanded
       expect(frame).toContain('/pets')
+
+      // Press h to collapse
+      stdin.write('h')
+      await delay(50)
+      frame = lastFrame()!
+      expect(frame).toContain('\u25B6') // ▶ collapsed
+      expect(frame).not.toContain('/pets')
     })
 
     it('does not respond to input when not focused', async () => {
@@ -280,7 +305,7 @@ describe('EndpointList', () => {
       expect(frame).not.toContain('/pets/{petId}')
     })
 
-    it('clears filter on Escape', async () => {
+    it('clears filter on Escape and restores collapsed state', async () => {
       const onSelect = mock(() => {})
       const { lastFrame, stdin } = render(
         <EndpointList tagGroups={tagGroups} isFocused={true} onSelectEndpoint={onSelect} />,
@@ -294,12 +319,12 @@ describe('EndpointList', () => {
       stdin.write('\x1b')
       await delay(50)
       const frame = lastFrame()!
-      // All endpoints should be visible again
-      expect(frame).toContain('/pets')
-      expect(frame).toContain('/store/inventory')
       // Tag headers should be back
       expect(frame).toContain('pets')
       expect(frame).toContain('store')
+      // Groups are still collapsed — endpoints not visible
+      expect(frame).not.toContain('/pets')
+      expect(frame).not.toContain('/store/inventory')
     })
 
     it('shows flattened results without tag headers when filtering', async () => {

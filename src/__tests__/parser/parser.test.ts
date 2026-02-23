@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { parseSpec } from '@/parser/index.js'
-import { SpecParseError } from '@/types/index.js'
 
 const FIXTURES = join(import.meta.dir, '../fixtures')
 
@@ -34,8 +33,11 @@ describe('parseSpec (end-to-end)', () => {
     expect(result.endpoints).toHaveLength(0)
   })
 
-  test('throws SpecParseError for invalid content', async () => {
-    await expect(parseSpec('{"invalid": true}')).rejects.toBeInstanceOf(SpecParseError)
+  test('continues with warnings for spec with validation issues', async () => {
+    const result = await parseSpec('{"invalid": true}')
+    // Lenient validation: returns a degraded result instead of throwing
+    expect(result.info.title).toBe('Untitled')
+    expect(result.endpoints).toHaveLength(0)
   })
 
   test('resolves $ref references in endpoints', async () => {

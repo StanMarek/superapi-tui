@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Box, Text, useInput } from 'ink'
 import type { Endpoint, TagGroup } from '@/types/index.js'
 import { METHOD_COLORS } from '@/utils/http-method.js'
@@ -58,9 +58,17 @@ function getTagAtCursor(
 
 export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCaptureChange }: Props) {
   const [cursorIndex, setCursorIndex] = useState(0)
-  const [collapsedTags, setCollapsedTags] = useState<ReadonlySet<string>>(new Set())
+  const [collapsedTags, setCollapsedTags] = useState<ReadonlySet<string>>(
+    () => new Set(tagGroups.map(g => g.name)),
+  )
   const [filterText, setFilterText] = useState('')
   const [isFiltering, setIsFiltering] = useState(false)
+
+  // Re-collapse all tags when tagGroups change (e.g., new spec loaded)
+  useEffect(() => {
+    setCollapsedTags(new Set(tagGroups.map(g => g.name)))
+    setCursorIndex(0)
+  }, [tagGroups])
 
   const rows = useMemo(() => {
     if (isFiltering) {
