@@ -1,5 +1,5 @@
 import { Box } from 'ink'
-import { useNavigation } from '@/hooks/index.js'
+import { useNavigation, useConfig } from '@/hooks/index.js'
 import { EndpointList } from '@/components/EndpointList.js'
 import { EndpointDetail } from '@/components/EndpointDetail.js'
 import { RequestPanel } from '@/components/RequestPanel.js'
@@ -12,6 +12,7 @@ interface Props {
 
 export default function App({ spec }: Props) {
   const { focusedPanel, selectedEndpoint, selectEndpoint, setTextCapture, fullscreenPanel, showHelp } = useNavigation()
+  const { saveServerAuth, findAuthForServer, preferences } = useConfig()
 
   return (
     <Box flexDirection="column" width="100%" height="100%">
@@ -65,6 +66,9 @@ export default function App({ spec }: Props) {
               servers={spec.servers}
               securitySchemes={spec.securitySchemes}
               onTextCaptureChange={setTextCapture}
+              onSaveServerAuth={saveServerAuth}
+              findAuthForServer={findAuthForServer}
+              defaultResponseTab={preferences.defaultResponseTab}
             />
           </Box>
         )}

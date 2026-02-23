@@ -8,6 +8,7 @@ import type {
   AuthCredentials,
   AuthFieldKey,
   AuthState,
+  AuthMethod,
 } from '@/types/index.js'
 import { resolveServerUrl, buildRequestUrl, sendRequest, deriveAuthOptions, applyAuth } from '@/http/index.js'
 import { generateBodyTemplate } from '@/http/index.js'
@@ -33,6 +34,7 @@ export interface RequestState {
 export function useRequestState(
   endpoint: Endpoint | null,
   securitySchemes: readonly SecuritySchemeInfo[],
+  defaultResponseTab?: ResponseTab,
 ): RequestState {
   const [selectedServerIndex, setSelectedServerIndex] = useState(0)
   const [paramValues, setParamValues] = useState<Map<string, string>>(new Map())
@@ -41,7 +43,7 @@ export function useRequestState(
   const [response, setResponse] = useState<HttpResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<ResponseTab>('pretty')
+  const [activeTab, setActiveTab] = useState<ResponseTab>(defaultResponseTab ?? 'pretty')
   const isLoadingRef = useRef(false)
   const requestIdRef = useRef(0)
 
@@ -93,7 +95,7 @@ export function useRequestState(
     setIsLoading(false)
     isLoadingRef.current = false
     requestIdRef.current += 1
-    setActiveTab('pretty')
+    setActiveTab(defaultResponseTab ?? 'pretty')
     setBodyError(null)
 
     if (endpoint?.requestBody) {
@@ -163,6 +165,31 @@ export function useRequestState(
       }
     }
   }, [])
+
+  const restoreAuth = useCallback((auth: Exclude<AuthCredentials, { method: 'none' }>) => {
+    const targetMethod: AuthMethod = auth.method
+    const optionIndex = availableOptions.findIndex(o => o.method === targetMethod)
+    if (optionIndex === -1) return
+
+    setSelectedOptionIndex(optionIndex)
+
+    switch (auth.method) {
+      case 'bearer':
+        setAuthToken(auth.token)
+        break
+      case 'apiKey':
+        setAuthKey(auth.key)
+        break
+      case 'basic':
+        setAuthUsername(auth.username)
+        setAuthPassword(auth.password)
+        break
+      default: {
+        const _exhaustive: never = auth
+        throw new Error(`Unknown auth method: ${(_exhaustive as { method: string }).method}`)
+      }
+    }
+  }, [availableOptions])
 
   const send = useCallback(
     (servers: readonly ServerInfo[]) => {
@@ -286,7 +313,8 @@ export function useRequestState(
     cycleAuthOption,
     credentials,
     setAuthField,
-  }), [authExpanded, toggleAuth, availableOptions, unsupportedSchemes, selectedOptionIndex, cycleAuthOption, credentials, setAuthField])
+    restoreAuth,
+  }), [authExpanded, toggleAuth, availableOptions, unsupportedSchemes, selectedOptionIndex, cycleAuthOption, credentials, setAuthField, restoreAuth])
 
   return {
     selectedServerIndex,

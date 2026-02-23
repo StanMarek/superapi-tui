@@ -72,7 +72,7 @@ CLI entry point compiles to `./dist/cli.js`. The `bin` field in package.json map
 - **TUI Components** — Ink/React components for each panel
 - **HTTP Client** — Sends requests to endpoints using selected server + auth
 - **HTTP Module** — `src/http/` — `client.ts` (resolveServerUrl, buildRequestUrl, validateSsrf, sendRequest) + `template.ts` (generateBodyTemplate from schemas) + `auth.ts` (deriveAuthOptions, applyAuth). Barrel export from `index.ts`
-- **Config Manager** — Reads/writes `~/.superapi-tui.json` (saved servers, auth presets, UI preferences)
+- **Config Manager** — `src/config/` — `types.ts` (SavedAuth, SavedServer, Preferences, ConfigData), `errors.ts` (ConfigError), `io.ts` (loadConfig, saveConfig with lenient parsing), `match.ts` (matchServerAuth by normalized URL). Barrel export from `index.ts`. Reads/writes `~/.superapi-tui.json`
 
 ### Data Layer
 
@@ -110,19 +110,23 @@ The app accepts a single argument that can be:
 
 ### Authentication
 
-Three methods, configurable per-session (session-only, no config persistence). Auth is global — one setting for all endpoints, persists across endpoint changes. Spec-aware: auth options derived from `securitySchemes`; falls back to all 3 types if spec has none (or only unsupported schemes like oauth2/openIdConnect/cookie-apiKey).
+Three methods, configurable per-session with optional persistence. Auth is global — one setting for all endpoints, persists across endpoint changes. Spec-aware: auth options derived from `securitySchemes`; falls back to all 3 types if spec has none (or only unsupported schemes like oauth2/openIdConnect/cookie-apiKey). Press `W` in request panel to save server+auth to `~/.superapi-tui.json`; on next launch, auth auto-restores when server URL matches (normalized: trailing-slash removal + lowercase).
 
 - **Bearer Token** — `Authorization: Bearer <token>`
 - **API Key** — header or query parameter (configurable names)
 - **Basic Auth** — `Authorization: Basic <base64>`
 
-**Auth types:** `src/types/auth.ts` — `AuthMethod`, `AuthFieldKey` (literal union), `AuthOption` (discriminated union by method), `AuthCredentials` (discriminated union), `AuthState`
+**Auth types:** `src/types/auth.ts` — `AuthMethod`, `AuthFieldKey` (literal union), `AuthOption` (discriminated union by method), `AuthCredentials` (discriminated union), `AuthState` (includes `restoreAuth` for config restoration)
 **Auth utilities:** `src/http/auth.ts` — `deriveAuthOptions(schemes)` → `DeriveAuthResult { options, unsupportedSchemes }`, `applyAuth(credentials)` → headers + queryParams maps (skips empty values)
-**Hook integration:** `useRequestState(endpoint, securitySchemes)` manages auth state, injects auth into `send()`
+**Config types:** `src/config/types.ts` — `SavedAuth` (discriminated union), `SavedServer`, `Preferences`, `ConfigData`, `DEFAULT_CONFIG`
+**Config I/O:** `src/config/io.ts` — `loadConfig(configPath?)` lenient parse with `console.warn` on issues, `saveConfig(data, configPath?)` writes pretty JSON
+**Config matching:** `src/config/match.ts` — `matchServerAuth(savedServers, specServerUrl)` normalized URL matching
+**Config hook:** `src/hooks/useConfig.ts` — `useConfig()` → `ConfigState { config, isLoading, saveServerAuth, findAuthForServer, preferences }`. Uses `configRef` for stale-closure safety
+**Hook integration:** `useRequestState(endpoint, securitySchemes, defaultResponseTab?)` manages auth state, injects auth into `send()`, provides `restoreAuth` for config-based restoration
 
 ### Keyboard Navigation
 
-Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), `q`/`Ctrl+C` (quit), `/` (filter), `?` (help), `f` (fullscreen toggle). Navigation: `hjkl`/arrow keys, `g`/`G` (top/bottom). Request panel: `s` (send), `e` (edit body), `S` (switch server), `a` (auth config), `1`/`2`/`3` (response tabs).
+Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), `q`/`Ctrl+C` (quit), `/` (filter), `?` (help), `f` (fullscreen toggle). Navigation: `hjkl`/arrow keys, `g`/`G` (top/bottom). Request panel: `s` (send), `e` (edit body), `S` (switch server), `a` (auth config), `W` (save server+auth to config), `1`/`2`/`3` (response tabs).
 
 ## Testing
 

@@ -1,1 +1,5 @@
-// Config manager — ~/.superapi-tui.json
+export type { ConfigData, SavedServer, SavedAuth, Preferences } from './types.js'
+export { DEFAULT_CONFIG, DEFAULT_PREFERENCES } from './types.js'
+export { ConfigError } from './errors.js'
+export { loadConfig, saveConfig, getConfigPath } from './io.js'
+export { matchServerAuth } from './match.js'
