@@ -14,7 +14,7 @@ interface Props {
   readonly servers: readonly ServerInfo[]
   readonly securitySchemes: readonly SecuritySchemeInfo[]
   readonly onTextCaptureChange?: (active: boolean) => void
-  readonly onSaveServerAuth?: (name: string, url: string, auth: SavedAuth) => void
+  readonly onSaveServerAuth?: (name: string, url: string, auth?: SavedAuth) => void
   readonly findAuthForServer?: (specServerUrl: string) => SavedAuth | null
   readonly defaultResponseTab?: ResponseTab
 }
@@ -346,12 +346,10 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
           if (server) {
             const serverUrl = resolveServerUrl(server)
             const savedAuth = credentialsToSavedAuth(state.auth.credentials)
-            if (savedAuth) {
-              const serverName = server.description ?? serverUrl
-              onSaveServerAuth(serverName, serverUrl, savedAuth)
-              setSaveMessage('Saved to config')
-              setTimeout(() => setSaveMessage(null), 2000)
-            }
+            const serverName = server.description ?? serverUrl
+            onSaveServerAuth(serverName, serverUrl, savedAuth ?? undefined)
+            setSaveMessage('Saved to config')
+            setTimeout(() => setSaveMessage(null), 2000)
           }
         }
         return
