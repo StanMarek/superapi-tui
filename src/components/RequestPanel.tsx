@@ -3,6 +3,7 @@ import { Box, Text, useInput } from 'ink'
 import { Spinner } from '@inkjs/ui'
 import type { Endpoint, ServerInfo, SecuritySchemeInfo, AuthFieldKey, AuthCredentials, ResponseTab } from '@/types/index.js'
 import type { SavedAuth } from '@/config/index.js'
+import { getConfigPath } from '@/config/index.js'
 import { METHOD_COLORS } from '@/utils/http-method.js'
 import { useRequestState } from '@/hooks/useRequestState.js'
 import { useScrollableList } from '@/hooks/useScrollableList.js'
@@ -348,7 +349,7 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
             const savedAuth = credentialsToSavedAuth(state.auth.credentials)
             const serverName = server.description ?? serverUrl
             onSaveServerAuth(serverName, serverUrl, savedAuth ?? undefined)
-            setSaveMessage('Saved to config')
+            setSaveMessage(`Saved to ${getConfigPath()}`)
             setTimeout(() => setSaveMessage(null), 2000)
           }
         }
