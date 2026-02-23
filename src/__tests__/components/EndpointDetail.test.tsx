@@ -132,36 +132,55 @@ describe('EndpointDetail', () => {
   })
 
   describe('Sections', () => {
-    it('shows Parameters section header', () => {
+    it('shows section headers collapsed by default', () => {
       const { lastFrame } = render(
         <EndpointDetail endpoint={endpointWithDetails} isFocused={false} componentSchemas={componentSchemas} />,
       )
-      expect(lastFrame()!).toContain('Parameters')
+      const frame = lastFrame()!
+      expect(frame).toContain('Parameters')
+      expect(frame).toContain('Responses')
+      // Collapsed arrow
+      expect(frame).toContain('\u25b6')
+      // Section content should NOT be visible (only headers)
+      expect(frame).not.toContain('include')
+      expect(frame).not.toContain('200')
     })
 
-    it('shows parameter names and types', () => {
-      const { lastFrame } = render(
-        <EndpointDetail endpoint={endpointWithDetails} isFocused={false} componentSchemas={componentSchemas} />,
+    it('shows parameter names after expanding Parameters section', async () => {
+      const { lastFrame, stdin } = render(
+        <EndpointDetail endpoint={endpointWithDetails} isFocused={true} componentSchemas={componentSchemas} />,
       )
+      // Cursor starts on Parameters header (collapsed). Press Enter to expand.
+      stdin.write('\r')
+      await delay(50)
       const frame = lastFrame()!
       expect(frame).toContain('userId')
       expect(frame).toContain('include')
     })
 
-    it('shows Responses section header', () => {
-      const { lastFrame } = render(
-        <EndpointDetail endpoint={endpointWithDetails} isFocused={false} componentSchemas={componentSchemas} />,
+    it('shows Responses content after expanding Responses section', async () => {
+      const { lastFrame, stdin } = render(
+        <EndpointDetail endpoint={endpointWithDetails} isFocused={true} componentSchemas={componentSchemas} />,
       )
+      // Navigate to Responses header (skip Parameters header)
+      stdin.write('j')
+      await delay(50)
+      // Expand Responses
+      stdin.write('\r')
+      await delay(50)
       const frame = lastFrame()!
       expect(frame).toContain('Responses')
       expect(frame).toContain('200')
       expect(frame).toContain('404')
     })
 
-    it('shows Request Body section for POST endpoints', () => {
-      const { lastFrame } = render(
-        <EndpointDetail endpoint={endpointWithBody} isFocused={false} componentSchemas={componentSchemas} />,
+    it('shows Request Body content after expanding for POST endpoints', async () => {
+      const { lastFrame, stdin } = render(
+        <EndpointDetail endpoint={endpointWithBody} isFocused={true} componentSchemas={componentSchemas} />,
       )
+      // Cursor starts on Request Body header (collapsed). Press Enter to expand.
+      stdin.write('\r')
+      await delay(50)
       const frame = lastFrame()!
       expect(frame).toContain('Request Body')
       expect(frame).toContain('name')
@@ -177,33 +196,38 @@ describe('EndpointDetail', () => {
   })
 
   describe('Section collapsing', () => {
-    it('collapses Parameters section with Enter on header', async () => {
+    it('expands then collapses section with Enter toggle', async () => {
       const { lastFrame, stdin } = render(
         <EndpointDetail endpoint={endpointWithDetails} isFocused={true} componentSchemas={componentSchemas} />,
       )
-      // Verify parameter content is visible before collapse
-      expect(lastFrame()!).toContain('include')
-      // Cursor starts at first row (Parameters header). Press Enter to collapse.
+      // Sections start collapsed — content hidden
+      expect(lastFrame()!).not.toContain('include')
+      // Enter expands Parameters
       stdin.write('\r')
       await delay(50)
-      const frame = lastFrame()!
-      // After collapse, parameter names should be hidden (check 'include' which only appears in parameters)
-      expect(frame).not.toContain('include')
-      // The collapsed arrow should be visible
-      expect(frame).toContain('\u25b6')
+      expect(lastFrame()!).toContain('include')
+      // Enter collapses again
+      stdin.write('\r')
+      await delay(50)
+      expect(lastFrame()!).not.toContain('include')
+      expect(lastFrame()!).toContain('\u25b6')
     })
   })
 
   describe('Schema navigation', () => {
-    it('shows User ref in the Responses section', () => {
-      const { lastFrame } = render(
+    it('shows User ref in Responses section after expanding', async () => {
+      const { lastFrame, stdin } = render(
         <EndpointDetail endpoint={endpointWithDetails} isFocused={true} componentSchemas={componentSchemas} />,
       )
-      const frame = lastFrame()!
-      expect(frame).toContain('User')
+      // Navigate to Responses header and expand
+      stdin.write('j')
+      await delay(50)
+      stdin.write('\r')
+      await delay(50)
+      expect(lastFrame()!).toContain('User')
     })
 
-    it('shows endpoint view sections on initial render', () => {
+    it('shows section headers on initial render', () => {
       const { lastFrame } = render(
         <EndpointDetail endpoint={endpointWithDetails} isFocused={true} componentSchemas={componentSchemas} />,
       )
@@ -214,48 +238,52 @@ describe('EndpointDetail', () => {
   })
 
   describe('h/l collapse/expand', () => {
-    it('collapses section with h key', async () => {
-      const { lastFrame, stdin } = render(
-        <EndpointDetail endpoint={endpointWithDetails} isFocused={true} componentSchemas={componentSchemas} />,
-      )
-      expect(lastFrame()!).toContain('include')
-      // h on Parameters header should collapse it
-      stdin.write('h')
-      await delay(50)
-      expect(lastFrame()!).not.toContain('include')
-    })
-
     it('expands collapsed section with l key', async () => {
       const { lastFrame, stdin } = render(
         <EndpointDetail endpoint={endpointWithDetails} isFocused={true} componentSchemas={componentSchemas} />,
       )
-      // Collapse first
-      stdin.write('h')
-      await delay(50)
+      // Starts collapsed
       expect(lastFrame()!).not.toContain('include')
-      // Expand with l
+      // l on Parameters header expands it
       stdin.write('l')
       await delay(50)
       expect(lastFrame()!).toContain('include')
     })
+
+    it('collapses expanded section with h key', async () => {
+      const { lastFrame, stdin } = render(
+        <EndpointDetail endpoint={endpointWithDetails} isFocused={true} componentSchemas={componentSchemas} />,
+      )
+      // Expand first
+      stdin.write('l')
+      await delay(50)
+      expect(lastFrame()!).toContain('include')
+      // h collapses
+      stdin.write('h')
+      await delay(50)
+      expect(lastFrame()!).not.toContain('include')
+    })
   })
 
   describe('State reset on endpoint change', () => {
-    it('re-expands previously collapsed sections when endpoint changes', async () => {
+    it('collapses all sections when endpoint changes', async () => {
       const { lastFrame, stdin, rerender } = render(
         <EndpointDetail endpoint={endpointWithDetails} isFocused={true} componentSchemas={componentSchemas} />,
       )
-      // Collapse Parameters section
+      // Expand Parameters section
       stdin.write('\r')
       await delay(50)
-      expect(lastFrame()!).not.toContain('include')
+      expect(lastFrame()!).toContain('include')
       // Switch endpoint
       rerender(
         <EndpointDetail endpoint={endpointWithBody} isFocused={true} componentSchemas={componentSchemas} />,
       )
       await delay(50)
-      // New endpoint should have expanded sections
-      expect(lastFrame()!).toContain('Request Body')
+      // New endpoint should have collapsed sections
+      const frame = lastFrame()!
+      expect(frame).toContain('Request Body')
+      expect(frame).toContain('\u25b6') // collapsed
+      expect(frame).not.toContain('name')
     })
   })
 })

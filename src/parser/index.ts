@@ -5,12 +5,16 @@ import { dereferenceSpec } from './dereference.js'
 import { transformSpec } from './transform.js'
 
 export { validateSpec } from './validate.js'
+export type { ValidationResult } from './validate.js'
 export { dereferenceSpec } from './dereference.js'
 export { transformSpec } from './transform.js'
 export { transformSchema } from './transform-schema.js'
 
 export async function parseSpec(content: string): Promise<ParsedSpec> {
-  await validateSpec(content)
+  const { warnings } = await validateSpec(content)
+  if (warnings.length > 0) {
+    console.warn(`superapi-tui: spec has validation issues (continuing anyway):\n  - ${warnings.join('\n  - ')}`)
+  }
   const doc = dereferenceSpec(content)
   try {
     return transformSpec(doc)

@@ -126,11 +126,11 @@ describe('RequestPanel integration', () => {
     // Initial state: endpoints panel focused
     expect(lastFrame()).toContain('Request / Response')
 
-    // Select the first endpoint (Enter on the expanded tag group → first endpoint)
-    // Navigate down to the first endpoint row
+    // Expand tag group (collapsed by default), navigate to first endpoint, select it
+    stdin.write('\r')
+    await delay(50)
     stdin.write('j')
     await delay(50)
-    // Select it with Enter
     stdin.write('\r')
     await delay(50)
 
@@ -165,7 +165,9 @@ describe('RequestPanel integration', () => {
     const { lastFrame, stdin } = render(<App spec={testSpec} />)
     await delay(100)
 
-    // Select endpoint
+    // Expand tag group (collapsed by default), select first endpoint
+    stdin.write('\r')
+    await delay(50)
     stdin.write('j')
     await delay(50)
     stdin.write('\r')
@@ -203,7 +205,9 @@ describe('RequestPanel integration', () => {
     const { lastFrame, stdin } = render(<App spec={noServerSpec} />)
     await delay(100)
 
-    // Select endpoint
+    // Expand tag group (collapsed by default), select first endpoint
+    stdin.write('\r')
+    await delay(50)
     stdin.write('j')
     await delay(50)
     stdin.write('\r')
@@ -227,7 +231,9 @@ describe('RequestPanel integration', () => {
     const { lastFrame, stdin } = render(<App spec={httpSpec} />)
     await delay(100)
 
-    // Select endpoint
+    // Expand tag group (collapsed by default), select first endpoint
+    stdin.write('\r')
+    await delay(50)
     stdin.write('j')
     await delay(50)
     stdin.write('\r')
@@ -251,7 +257,9 @@ describe('RequestPanel integration', () => {
     const { lastFrame, stdin } = render(<App spec={testSpec} />)
     await delay(100)
 
-    // Navigate to POST /pets (second endpoint under tag)
+    // Expand tag group (collapsed by default), navigate to POST /pets (second endpoint)
+    stdin.write('\r')
+    await delay(50)
     stdin.write('j')
     await delay(50)
     stdin.write('j')
@@ -290,7 +298,9 @@ describe('Auth integration', () => {
     const { lastFrame, stdin } = render(<App spec={bearerSpec} />)
     await delay(100)
 
-    // Select endpoint
+    // Expand tag group (collapsed by default), select first endpoint
+    stdin.write('\r')
+    await delay(50)
     stdin.write('j')
     await delay(50)
     stdin.write('\r')
@@ -360,7 +370,9 @@ describe('Auth integration', () => {
     const { lastFrame, stdin } = render(<App spec={apiKeySpec} />)
     await delay(100)
 
-    // Select endpoint
+    // Expand tag group (collapsed by default), select first endpoint
+    stdin.write('\r')
+    await delay(50)
     stdin.write('j')
     await delay(50)
     stdin.write('\r')
@@ -429,7 +441,9 @@ describe('Auth integration', () => {
     const { lastFrame, stdin } = render(<App spec={bearerSpec} />)
     await delay(100)
 
-    // Select first endpoint
+    // Expand tag group (collapsed by default), select first endpoint
+    stdin.write('\r')
+    await delay(50)
     stdin.write('j')
     await delay(50)
     stdin.write('\r')

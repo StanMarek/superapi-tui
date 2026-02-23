@@ -58,7 +58,9 @@ function getTagAtCursor(
 
 export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCaptureChange }: Props) {
   const [cursorIndex, setCursorIndex] = useState(0)
-  const [collapsedTags, setCollapsedTags] = useState<ReadonlySet<string>>(new Set())
+  const [collapsedTags, setCollapsedTags] = useState<ReadonlySet<string>>(
+    () => new Set(tagGroups.map(g => g.name)),
+  )
   const [filterText, setFilterText] = useState('')
   const [isFiltering, setIsFiltering] = useState(false)
 
