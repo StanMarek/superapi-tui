@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Box, Text, useApp } from 'ink'
 import { Spinner } from '@inkjs/ui'
 import { loadSpec } from '@/loader/index.js'
 import { parseSpec } from '@/parser/index.js'
+import { Launcher } from './Launcher.js'
 import App from '@/App.js'
 import type { ParsedSpec } from '@/types/index.js'
 
@@ -11,30 +12,34 @@ interface Props {
 }
 
 type State =
-  | { readonly phase: 'no-input' }
-  | { readonly phase: 'loading'; readonly message: string }
+  | { readonly phase: 'launcher' }
+  | { readonly phase: 'loading'; readonly message: string; readonly specInput: string }
   | { readonly phase: 'loaded'; readonly spec: ParsedSpec }
   | { readonly phase: 'error'; readonly message: string }
 
 export function SpecLoader({ input }: Props) {
   const { exit } = useApp()
   const [state, setState] = useState<State>(
-    input ? { phase: 'loading', message: `Loading spec from ${input}...` } : { phase: 'no-input' },
+    input
+      ? { phase: 'loading', message: `Loading spec from ${input}...`, specInput: input }
+      : { phase: 'launcher' },
   )
 
+  // Derived value: non-null only when we're in loading phase, stable across message updates
+  const specInputForLoad = state.phase === 'loading' ? state.specInput : null
+
   useEffect(() => {
-    if (!input) return
-    const specInput = input
+    if (!specInputForLoad) return
+    const target = specInputForLoad
 
     let cancelled = false
 
     async function load() {
       try {
-        setState({ phase: 'loading', message: `Loading spec from ${specInput}...` })
-        const result = await loadSpec(specInput)
+        const result = await loadSpec(target)
         if (cancelled) return
 
-        setState({ phase: 'loading', message: 'Parsing spec...' })
+        setState({ phase: 'loading', message: 'Parsing spec...', specInput: target })
         const spec = await parseSpec(result.content)
         if (cancelled) return
 
@@ -53,7 +58,7 @@ export function SpecLoader({ input }: Props) {
     return () => {
       cancelled = true
     }
-  }, [input])
+  }, [specInputForLoad])
 
   // Exit after showing error for a moment
   useEffect(() => {
@@ -66,32 +71,12 @@ export function SpecLoader({ input }: Props) {
     return () => clearTimeout(timer)
   }, [state, exit])
 
-  // Exit after rendering usage screen
-  useEffect(() => {
-    if (state.phase !== 'no-input') return
-    const timer = setTimeout(() => {
-      exit()
-    }, 100)
-    return () => clearTimeout(timer)
-  }, [state.phase, exit])
+  const handleLauncherSelect = useCallback((value: string) => {
+    setState({ phase: 'loading', message: `Loading spec from ${value}...`, specInput: value })
+  }, [])
 
-  if (state.phase === 'no-input') {
-    return (
-      <Box flexDirection="column" padding={1}>
-        <Text bold color="cyan">
-          superapi-tui
-        </Text>
-        <Text dimColor>OpenAPI v3.0/v3.1 Terminal Browser</Text>
-        <Box marginTop={1}>
-          <Text>Usage: superapi-tui {'<'}file-or-url{'>'}</Text>
-        </Box>
-        <Box marginTop={1} flexDirection="column">
-          <Text dimColor>  superapi-tui ./openapi.yaml</Text>
-          <Text dimColor>  superapi-tui https://example.com/v3/api-docs</Text>
-          <Text dimColor>  superapi-tui https://example.com/swagger-ui/index.html</Text>
-        </Box>
-      </Box>
-    )
+  if (state.phase === 'launcher') {
+    return <Launcher onSelect={handleLauncherSelect} />
   }
 
   if (state.phase === 'loading') {
