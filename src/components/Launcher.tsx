@@ -22,13 +22,18 @@ export function Launcher({ onSelect }: Props) {
     let cancelled = false
 
     async function init() {
-      const config = await loadConfig()
-      if (cancelled) return
+      try {
+        const config = await loadConfig()
+        if (cancelled) return
 
-      if (config.servers.length === 0) {
+        if (config.servers.length === 0) {
+          setPhase({ kind: 'url-input' })
+        } else {
+          setPhase({ kind: 'select', servers: config.servers })
+        }
+      } catch {
+        if (cancelled) return
         setPhase({ kind: 'url-input' })
-      } else {
-        setPhase({ kind: 'select', servers: config.servers })
       }
     }
 

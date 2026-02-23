@@ -110,7 +110,7 @@ export function useRequestState(
     } else {
       setBodyText('{}')
     }
-  }, [endpoint])
+  }, [endpoint, defaultResponseTab])
 
   const cycleServer = useCallback(() => {
     setSelectedServerIndex(prev => prev + 1)
@@ -287,7 +287,7 @@ export function useRequestState(
         .then(res => {
           if (requestIdRef.current !== currentRequestId) return
           setResponse(res)
-          setActiveTab('pretty')
+          setActiveTab(defaultResponseTab ?? 'pretty')
         })
         .catch((err: unknown) => {
           if (requestIdRef.current !== currentRequestId) return

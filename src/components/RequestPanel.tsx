@@ -15,8 +15,9 @@ interface Props {
   readonly servers: readonly ServerInfo[]
   readonly securitySchemes: readonly SecuritySchemeInfo[]
   readonly onTextCaptureChange?: (active: boolean) => void
-  readonly onSaveServerAuth?: (name: string, url: string, auth?: SavedAuth) => void
+  readonly onSaveServerAuth?: (name: string, url: string, auth?: SavedAuth) => Promise<boolean>
   readonly findAuthForServer?: (specServerUrl: string) => SavedAuth | null
+  readonly configLoaded?: boolean
   readonly defaultResponseTab?: ResponseTab
 }
 
@@ -138,7 +139,7 @@ function credentialsToSavedAuth(creds: AuthCredentials): SavedAuth | null {
   }
 }
 
-export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, onTextCaptureChange, onSaveServerAuth, findAuthForServer, defaultResponseTab }: Props) {
+export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, onTextCaptureChange, onSaveServerAuth, findAuthForServer, configLoaded, defaultResponseTab }: Props) {
   const state = useRequestState(endpoint, securitySchemes, defaultResponseTab)
   const [editingParam, setEditingParam] = useState<string | null>(null)
   const [editingBody, setEditingBody] = useState(false)
@@ -217,10 +218,10 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
     const serverUrl = resolveServerUrl(currentServer)
     const savedAuth = findAuthForServer(serverUrl)
     if (savedAuth) {
-      initialAuthApplied.current = true
       state.auth.restoreAuth(savedAuth)
+      initialAuthApplied.current = true
     }
-  }, [servers, findAuthForServer, state.selectedServerIndex])
+  }, [servers, findAuthForServer, configLoaded, state.selectedServerIndex])
 
   useInput(
     (input, key) => {
@@ -348,9 +349,14 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
             const serverUrl = resolveServerUrl(server)
             const savedAuth = credentialsToSavedAuth(state.auth.credentials)
             const serverName = server.description ?? serverUrl
-            onSaveServerAuth(serverName, serverUrl, savedAuth ?? undefined)
-            setSaveMessage(`Saved to ${getConfigPath()}`)
-            setTimeout(() => setSaveMessage(null), 2000)
+            onSaveServerAuth(serverName, serverUrl, savedAuth ?? undefined).then(ok => {
+              if (ok) {
+                setSaveMessage(`Saved to ${getConfigPath()}`)
+              } else {
+                setSaveMessage('Failed to save config')
+              }
+              setTimeout(() => setSaveMessage(null), 2000)
+            })
           }
         }
         return

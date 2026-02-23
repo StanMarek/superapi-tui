@@ -1,6 +1,6 @@
 import type { SavedServer, SavedAuth } from './types.js'
 
-function normalizeUrl(url: string): string {
+export function normalizeUrl(url: string): string {
   return url.replace(/\/+$/, '').toLowerCase()
 }
 

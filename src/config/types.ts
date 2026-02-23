@@ -1,9 +1,7 @@
 import type { ResponseTab } from '@/types/http.js'
+import type { AuthCredentials } from '@/types/auth.js'
 
-export type SavedAuth =
-  | { readonly method: 'bearer'; readonly token: string }
-  | { readonly method: 'apiKey'; readonly key: string; readonly paramName: string; readonly location: 'header' | 'query' }
-  | { readonly method: 'basic'; readonly username: string; readonly password: string }
+export type SavedAuth = Exclude<AuthCredentials, { method: 'none' }>
 
 export interface SavedServer {
   readonly name: string

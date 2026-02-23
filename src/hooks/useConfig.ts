@@ -1,17 +1,13 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import type { ConfigData, SavedAuth, Preferences } from '@/config/index.js'
-import { DEFAULT_CONFIG, DEFAULT_PREFERENCES, loadConfig, saveConfig, matchServerAuth } from '@/config/index.js'
+import { DEFAULT_CONFIG, DEFAULT_PREFERENCES, loadConfig, saveConfig, matchServerAuth, normalizeUrl } from '@/config/index.js'
 
 export interface ConfigState {
   readonly config: ConfigData | null
   readonly isLoading: boolean
-  readonly saveServerAuth: (name: string, url: string, auth?: SavedAuth) => void
+  readonly saveServerAuth: (name: string, url: string, auth?: SavedAuth) => Promise<boolean>
   readonly findAuthForServer: (specServerUrl: string) => SavedAuth | null
   readonly preferences: Preferences
-}
-
-function normalizeUrl(url: string): string {
-  return url.replace(/\/+$/, '').toLowerCase()
 }
 
 export function useConfig(): ConfigState {
@@ -28,8 +24,9 @@ export function useConfig(): ConfigState {
         configRef.current = data
         setConfig(data)
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled) return
+        console.warn('superapi-tui: unexpected error loading config:', err instanceof Error ? err.message : String(err))
         configRef.current = DEFAULT_CONFIG
         setConfig(DEFAULT_CONFIG)
       })
@@ -41,7 +38,7 @@ export function useConfig(): ConfigState {
     return () => { cancelled = true }
   }, [])
 
-  const saveServerAuth = useCallback((name: string, url: string, auth?: SavedAuth) => {
+  const saveServerAuth = useCallback(async (name: string, url: string, auth?: SavedAuth): Promise<boolean> => {
     const current = configRef.current ?? DEFAULT_CONFIG
     const normalizedUrl = normalizeUrl(url)
 
@@ -68,9 +65,13 @@ export function useConfig(): ConfigState {
     configRef.current = updated
     setConfig(updated)
 
-    saveConfig(updated).catch(err => {
+    try {
+      await saveConfig(updated)
+      return true
+    } catch (err) {
       console.warn('superapi-tui: failed to save config:', err instanceof Error ? err.message : String(err))
-    })
+      return false
+    }
   }, [])
 
   const findAuthForServer = useCallback((specServerUrl: string): SavedAuth | null => {

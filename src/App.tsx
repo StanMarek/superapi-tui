@@ -12,7 +12,7 @@ interface Props {
 
 export default function App({ spec }: Props) {
   const { focusedPanel, selectedEndpoint, selectEndpoint, setTextCapture, fullscreenPanel, showHelp } = useNavigation()
-  const { saveServerAuth, findAuthForServer, preferences } = useConfig()
+  const { saveServerAuth, findAuthForServer, preferences, isLoading: configLoading } = useConfig()
 
   return (
     <Box flexDirection="column" width="100%" height="100%">
@@ -68,6 +68,7 @@ export default function App({ spec }: Props) {
               onTextCaptureChange={setTextCapture}
               onSaveServerAuth={saveServerAuth}
               findAuthForServer={findAuthForServer}
+              configLoaded={!configLoading}
               defaultResponseTab={preferences.defaultResponseTab}
             />
           </Box>
