@@ -53,6 +53,7 @@ const KEYBINDING_SECTIONS: readonly Section[] = [
       { key: 'S', description: 'Switch server' },
       { key: 'a', description: 'Toggle auth config' },
       { key: 'e', description: 'Edit body' },
+      { key: 'W', description: 'Save server + auth to config' },
       { key: '1 / 2 / 3', description: 'Response tab (Pretty/Raw/Headers)' },
     ],
   },

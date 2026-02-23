@@ -22,4 +22,5 @@ export interface AuthState {
   readonly cycleAuthOption: () => void
   readonly credentials: AuthCredentials
   readonly setAuthField: (field: AuthFieldKey, value: string) => void
+  readonly restoreAuth: (auth: Exclude<AuthCredentials, { method: 'none' }>) => void
 }

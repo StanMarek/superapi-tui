@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { Box, Text, useInput } from 'ink'
 import { Spinner } from '@inkjs/ui'
-import type { Endpoint, ServerInfo, SecuritySchemeInfo, AuthFieldKey, ResponseTab } from '@/types/index.js'
+import type { Endpoint, ServerInfo, SecuritySchemeInfo, AuthFieldKey, AuthCredentials, ResponseTab } from '@/types/index.js'
+import type { SavedAuth } from '@/config/index.js'
+import { getConfigPath } from '@/config/index.js'
 import { METHOD_COLORS } from '@/utils/http-method.js'
 import { useRequestState } from '@/hooks/useRequestState.js'
 import { useScrollableList } from '@/hooks/useScrollableList.js'
@@ -13,6 +15,10 @@ interface Props {
   readonly servers: readonly ServerInfo[]
   readonly securitySchemes: readonly SecuritySchemeInfo[]
   readonly onTextCaptureChange?: (active: boolean) => void
+  readonly onSaveServerAuth?: (name: string, url: string, auth?: SavedAuth) => Promise<boolean>
+  readonly findAuthForServer?: (specServerUrl: string) => SavedAuth | null
+  readonly configLoaded?: boolean
+  readonly defaultResponseTab?: ResponseTab
 }
 
 type Row =
@@ -116,11 +122,30 @@ function colorForJsonLine(line: string): string {
   return 'white'
 }
 
-export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, onTextCaptureChange }: Props) {
-  const state = useRequestState(endpoint, securitySchemes)
+function credentialsToSavedAuth(creds: AuthCredentials): SavedAuth | null {
+  switch (creds.method) {
+    case 'none':
+      return null
+    case 'bearer':
+      return creds.token ? { method: 'bearer', token: creds.token } : null
+    case 'apiKey':
+      return creds.key ? { method: 'apiKey', key: creds.key, paramName: creds.paramName, location: creds.location } : null
+    case 'basic':
+      return (creds.username || creds.password) ? { method: 'basic', username: creds.username, password: creds.password } : null
+    default: {
+      const _exhaustive: never = creds
+      throw new Error(`Unknown auth method: ${(_exhaustive as { method: string }).method}`)
+    }
+  }
+}
+
+export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, onTextCaptureChange, onSaveServerAuth, findAuthForServer, configLoaded, defaultResponseTab }: Props) {
+  const state = useRequestState(endpoint, securitySchemes, defaultResponseTab)
   const [editingParam, setEditingParam] = useState<string | null>(null)
   const [editingBody, setEditingBody] = useState(false)
   const [editingAuthField, setEditingAuthField] = useState<AuthFieldKey | null>(null)
+  const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const initialAuthApplied = useRef(false)
 
   // Ref-backed edit buffer: ref is always current, state is debounced for display.
   // Prevents render storm when terminals send pasted text character-by-character.
@@ -181,6 +206,22 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
     setEditingAuthField(null)
     initEditBuffer('')
   }, [endpoint, initEditBuffer])
+
+  // Initial auth restoration from config
+  useEffect(() => {
+    if (initialAuthApplied.current || !findAuthForServer || servers.length === 0) return
+
+    const serverIdx = servers.length > 0 ? state.selectedServerIndex % servers.length : -1
+    const currentServer = serverIdx >= 0 ? servers[serverIdx] : null
+    if (!currentServer) return
+
+    const serverUrl = resolveServerUrl(currentServer)
+    const savedAuth = findAuthForServer(serverUrl)
+    if (savedAuth) {
+      state.auth.restoreAuth(savedAuth)
+      initialAuthApplied.current = true
+    }
+  }, [servers, findAuthForServer, configLoaded, state.selectedServerIndex])
 
   useInput(
     (input, key) => {
@@ -299,6 +340,28 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
         return
       }
 
+      // Save server + auth to config
+      if (input === 'W') {
+        if (onSaveServerAuth && servers.length > 0) {
+          const serverIdx = state.selectedServerIndex % servers.length
+          const server = servers[serverIdx]
+          if (server) {
+            const serverUrl = resolveServerUrl(server)
+            const savedAuth = credentialsToSavedAuth(state.auth.credentials)
+            const serverName = server.description ?? serverUrl
+            onSaveServerAuth(serverName, serverUrl, savedAuth ?? undefined).then(ok => {
+              if (ok) {
+                setSaveMessage(`Saved to ${getConfigPath()}`)
+              } else {
+                setSaveMessage('Failed to save config')
+              }
+              setTimeout(() => setSaveMessage(null), 2000)
+            })
+          }
+        }
+        return
+      }
+
       // Enter: context-dependent actions
       if (key.return) {
         const row = rows[cursorIndex]
@@ -375,6 +438,10 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
         <Text color={METHOD_COLORS[endpoint.method]}>{endpoint.method.toUpperCase()}</Text>
         <Text> {endpoint.path}</Text>
       </Box>
+
+      {saveMessage && (
+        <Text color="green">{saveMessage}</Text>
+      )}
 
       {rows.map((row, index) => {
         const isSelected = index === cursorIndex && isFocused

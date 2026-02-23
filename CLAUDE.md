@@ -72,7 +72,7 @@ CLI entry point compiles to `./dist/cli.js`. The `bin` field in package.json map
 - **TUI Components** — Ink/React components for each panel
 - **HTTP Client** — Sends requests to endpoints using selected server + auth
 - **HTTP Module** — `src/http/` — `client.ts` (resolveServerUrl, buildRequestUrl, validateSsrf, sendRequest) + `template.ts` (generateBodyTemplate from schemas) + `auth.ts` (deriveAuthOptions, applyAuth). Barrel export from `index.ts`
-- **Config Manager** — Reads/writes `~/.superapi-tui.json` (saved servers, auth presets, UI preferences)
+- **Config Manager** — `src/config/` — `types.ts` (SavedAuth, SavedServer, Preferences, ConfigData), `errors.ts` (ConfigError), `io.ts` (loadConfig, saveConfig with lenient parsing + `chmod 0o600`), `match.ts` (matchServerAuth + normalizeUrl). Barrel export from `index.ts`. Reads/writes `~/.superapi-tui.json`
 
 ### Data Layer
 
@@ -91,7 +91,8 @@ CLI entry point compiles to `./dist/cli.js`. The `bin` field in package.json map
 - **EndpointList:** Flat `ListRow` discriminated union model for cursor navigation, collapsible tag groups, `/` filter mode
 - **EndpointDetail:** Collapsible sections (Parameters, Request Body, Responses) with `sectionHeader`/`content` row model. Sub-components: `ParameterList`, `SchemaView` (recursive, self-managed cursor), `ResponseList`. Schema drill-down via `useSchemaNavigation` hook.
 - **RequestPanel:** Row model (`server` → `auth-toggle` → [`auth-type` → `auth-field`...] → `param` → `body-editor` → `send` → `response-tabs` → `response-content`). Discriminated union `Row` type. State managed by `useRequestState` hook. Inline param/body/auth-field editing with text capture guard. Response viewer with Pretty/Raw/Headers tabs. Auth section is collapsible (`a` key), with type cycling and credential fields (bearer token, apiKey key, basic username/password).
-- **SpecLoader:** Async wrapper component handling loading/error/loaded states with Spinner from `@inkjs/ui`
+- **Launcher:** `src/components/Launcher.tsx` — pre-app interactive screen. Loads config via `loadConfig()` directly (no hook). State machine: `loading` → `select` (saved servers) or `url-input` (manual entry). Uses `Select`/`TextInput` from `@inkjs/ui`
+- **SpecLoader:** Phases: `launcher` (no input) → `loading` (spec input chosen) → `loaded` | `error`. Derived `specInputForLoad` triggers load effect without re-firing on message updates
 - **Components:** `src/components/` with barrel export from `index.ts`
 - **Hooks:** `src/hooks/` with barrel export from `index.ts`
 
@@ -110,19 +111,23 @@ The app accepts a single argument that can be:
 
 ### Authentication
 
-Three methods, configurable per-session (session-only, no config persistence). Auth is global — one setting for all endpoints, persists across endpoint changes. Spec-aware: auth options derived from `securitySchemes`; falls back to all 3 types if spec has none (or only unsupported schemes like oauth2/openIdConnect/cookie-apiKey).
+Three methods, configurable per-session with optional persistence. Auth is global — one setting for all endpoints, persists across endpoint changes. Spec-aware: auth options derived from `securitySchemes`; falls back to all 3 types if spec has none (or only unsupported schemes like oauth2/openIdConnect/cookie-apiKey). Press `W` in request panel to save server+auth to `~/.superapi-tui.json`; on next launch, auth auto-restores when server URL matches (normalized: trailing-slash removal + lowercase).
 
 - **Bearer Token** — `Authorization: Bearer <token>`
 - **API Key** — header or query parameter (configurable names)
 - **Basic Auth** — `Authorization: Basic <base64>`
 
-**Auth types:** `src/types/auth.ts` — `AuthMethod`, `AuthFieldKey` (literal union), `AuthOption` (discriminated union by method), `AuthCredentials` (discriminated union), `AuthState`
+**Auth types:** `src/types/auth.ts` — `AuthMethod`, `AuthFieldKey` (literal union), `AuthOption` (discriminated union by method), `AuthCredentials` (discriminated union), `AuthState` (includes `restoreAuth` for config restoration)
 **Auth utilities:** `src/http/auth.ts` — `deriveAuthOptions(schemes)` → `DeriveAuthResult { options, unsupportedSchemes }`, `applyAuth(credentials)` → headers + queryParams maps (skips empty values)
-**Hook integration:** `useRequestState(endpoint, securitySchemes)` manages auth state, injects auth into `send()`
+**Config types:** `src/config/types.ts` — `SavedAuth = Exclude<AuthCredentials, { method: 'none' }>`, `SavedServer`, `Preferences`, `ConfigData`, `DEFAULT_CONFIG`
+**Config I/O:** `src/config/io.ts` — `loadConfig(configPath?)` lenient parse with `console.warn` on issues (re-throws `ConfigError` — callers must handle), `saveConfig(data, configPath?)` writes pretty JSON + `chmod 0o600`
+**Config matching:** `src/config/match.ts` — `matchServerAuth(savedServers, specServerUrl)` normalized URL matching
+**Config hook:** `src/hooks/useConfig.ts` — `useConfig()` → `ConfigState { config, isLoading, saveServerAuth, findAuthForServer, preferences }`. Uses `configRef` for stale-closure safety
+**Hook integration:** `useRequestState(endpoint, securitySchemes, defaultResponseTab?)` manages auth state, injects auth into `send()`, provides `restoreAuth` for config-based restoration
 
 ### Keyboard Navigation
 
-Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), `q`/`Ctrl+C` (quit), `/` (filter), `?` (help), `f` (fullscreen toggle). Navigation: `hjkl`/arrow keys, `g`/`G` (top/bottom). Request panel: `s` (send), `e` (edit body), `S` (switch server), `a` (auth config), `1`/`2`/`3` (response tabs).
+Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), `q`/`Ctrl+C` (quit), `/` (filter), `?` (help), `f` (fullscreen toggle). Navigation: `hjkl`/arrow keys, `g`/`G` (top/bottom). Request panel: `s` (send), `e` (edit body), `S` (switch server), `a` (auth config), `W` (save server+auth to config), `1`/`2`/`3` (response tabs).
 
 ## Testing
 
@@ -140,6 +145,7 @@ Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), 
 - `useInput` tests: write raw chars (`stdin.write('j')`) or escape sequences (`stdin.write('\t')`)
 - Bun `mock().mock.lastCall` is typed `[] | undefined` — use `as unknown as [T1, T2]` to access args
 - Integration tests importing `App.tsx` may show "File not found" in parallel runs — run individually with `bun test <file>`
+- `mock.module()` leaks across parallel test files — if a test file mocks `@/config/index.js`, other files importing that module may get the mock. Tests pass individually; parallel failures from this are expected
 - Escape sequences: Escape=`\x1b`, Shift+Tab=`\x1b[Z`, Tab=`\t`
 
 ### Hook Testing
@@ -170,6 +176,7 @@ Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), 
 - OpenAPI path/server variable regex: use `\{([^}]+)\}` not `\{(\w+)\}` — param names can contain hyphens and dots
 - Callbacks consuming React state: accept optional arg for the current value to avoid stale closures (e.g., `validateBody(text?: string)` uses `text ?? bodyText`)
 - Stale async response protection: use a `useRef` counter incremented on endpoint change; ignore responses where counter has moved on
+- Ref-backed callbacks and effect deps: when a `useCallback` reads from a `useRef`, its identity never changes — dependent effects won't re-run when the ref updates. Pass an explicit signal prop (e.g., `configLoaded`) to trigger re-evaluation
 - Exhaustive switch defaults: use `never` type check in discriminated union switches to catch missing cases at compile time
 - Ink paste handling: use ref-backed edit buffer with debounced state sync (16ms) to prevent render storms — terminals may send paste char-by-char, causing one setState + re-render per character
 - Auth injection safety: `applyAuth` must skip setting headers/params when credential values are empty — sending `Authorization: Bearer ` (empty token) causes 401s
