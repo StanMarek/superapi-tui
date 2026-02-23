@@ -16,6 +16,19 @@ function TestHarness() {
   )
 }
 
+function FullHarness() {
+  const nav = useNavigation()
+  return (
+    <Box flexDirection="column">
+      <Text>panel:{nav.focusedPanel}</Text>
+      <Text>selected:{nav.selectedEndpoint?.id ?? 'none'}</Text>
+      <Text>capture:{String(nav.textCapture)}</Text>
+      <Text>fullscreen:{String(nav.fullscreenPanel ?? 'none')}</Text>
+      <Text>help:{String(nav.showHelp)}</Text>
+    </Box>
+  )
+}
+
 // Harness that toggles textCapture on '/' and off on Escape
 function TextCaptureHarness() {
   const nav = useNavigation()
@@ -33,6 +46,8 @@ function TextCaptureHarness() {
     <Box flexDirection="column">
       <Text>panel:{nav.focusedPanel}</Text>
       <Text>capture:{String(nav.textCapture)}</Text>
+      <Text>fullscreen:{String(nav.fullscreenPanel ?? 'none')}</Text>
+      <Text>help:{String(nav.showHelp)}</Text>
     </Box>
   )
 }
@@ -111,5 +126,171 @@ describe('useNavigation', () => {
     stdin.write('\t')
     await delay(50)
     expect(lastFrame()).toContain('panel:detail')
+  })
+
+  describe('fullscreen', () => {
+    it('starts with no fullscreen', () => {
+      const { lastFrame } = render(<FullHarness />)
+      expect(lastFrame()).toContain('fullscreen:none')
+    })
+
+    it('f toggles fullscreen for focused panel', async () => {
+      const { lastFrame, stdin } = render(<FullHarness />)
+      expect(lastFrame()).toContain('panel:endpoints')
+
+      stdin.write('f')
+      await delay(50)
+      expect(lastFrame()).toContain('fullscreen:endpoints')
+    })
+
+    it('f again exits fullscreen', async () => {
+      const { lastFrame, stdin } = render(<FullHarness />)
+
+      stdin.write('f')
+      await delay(50)
+      expect(lastFrame()).toContain('fullscreen:endpoints')
+
+      stdin.write('f')
+      await delay(50)
+      expect(lastFrame()).toContain('fullscreen:none')
+    })
+
+    it('Esc exits fullscreen without changing focus', async () => {
+      const { lastFrame, stdin } = render(<FullHarness />)
+
+      stdin.write('f')
+      await delay(50)
+      expect(lastFrame()).toContain('fullscreen:endpoints')
+      expect(lastFrame()).toContain('panel:endpoints')
+
+      stdin.write('\x1b') // Escape
+      await delay(50)
+      expect(lastFrame()).toContain('fullscreen:none')
+      expect(lastFrame()).toContain('panel:endpoints')
+    })
+
+    it('Tab exits fullscreen and cycles panel', async () => {
+      const { lastFrame, stdin } = render(<FullHarness />)
+
+      stdin.write('f')
+      await delay(50)
+      expect(lastFrame()).toContain('fullscreen:endpoints')
+
+      stdin.write('\t')
+      await delay(50)
+      expect(lastFrame()).toContain('fullscreen:none')
+      expect(lastFrame()).toContain('panel:detail')
+    })
+
+    it('f is suppressed during textCapture', async () => {
+      const { lastFrame, stdin } = render(<TextCaptureHarness />)
+
+      stdin.write('/')
+      await delay(50)
+      expect(lastFrame()).toContain('capture:true')
+
+      stdin.write('f')
+      await delay(50)
+      expect(lastFrame()).toContain('fullscreen:none')
+
+      // Exit text capture, then f should work
+      stdin.write('\x1b') // Escape
+      await delay(50)
+      stdin.write('f')
+      await delay(50)
+      expect(lastFrame()).toContain('fullscreen:endpoints')
+    })
+  })
+
+  describe('help overlay', () => {
+    it('starts with help hidden', () => {
+      const { lastFrame } = render(<FullHarness />)
+      expect(lastFrame()).toContain('help:false')
+    })
+
+    it('? toggles help overlay on', async () => {
+      const { lastFrame, stdin } = render(<FullHarness />)
+
+      stdin.write('?')
+      await delay(50)
+      expect(lastFrame()).toContain('help:true')
+    })
+
+    it('? dismisses help when visible', async () => {
+      const { lastFrame, stdin } = render(<FullHarness />)
+
+      stdin.write('?')
+      await delay(50)
+      expect(lastFrame()).toContain('help:true')
+
+      stdin.write('?')
+      await delay(50)
+      expect(lastFrame()).toContain('help:false')
+    })
+
+    it('Esc dismisses help', async () => {
+      const { lastFrame, stdin } = render(<FullHarness />)
+
+      stdin.write('?')
+      await delay(50)
+      expect(lastFrame()).toContain('help:true')
+
+      stdin.write('\x1b') // Escape
+      await delay(50)
+      expect(lastFrame()).toContain('help:false')
+    })
+
+    it('q, Tab, and f are suppressed while help is visible', async () => {
+      const { lastFrame, stdin } = render(<FullHarness />)
+
+      stdin.write('?')
+      await delay(50)
+      expect(lastFrame()).toContain('help:true')
+
+      // q should NOT exit
+      stdin.write('q')
+      await delay(50)
+      expect(lastFrame()).toContain('help:true')
+
+      // Tab should NOT cycle panels
+      stdin.write('\t')
+      await delay(50)
+      expect(lastFrame()).toContain('panel:endpoints')
+
+      // f should NOT toggle fullscreen
+      stdin.write('f')
+      await delay(50)
+      expect(lastFrame()).toContain('fullscreen:none')
+
+      // ? should dismiss
+      stdin.write('?')
+      await delay(50)
+      expect(lastFrame()).toContain('help:false')
+
+      // Now Tab should work
+      stdin.write('\t')
+      await delay(50)
+      expect(lastFrame()).toContain('panel:detail')
+    })
+
+    it('help during fullscreen: closing help preserves fullscreen', async () => {
+      const { lastFrame, stdin } = render(<FullHarness />)
+
+      // Enter fullscreen
+      stdin.write('f')
+      await delay(50)
+      expect(lastFrame()).toContain('fullscreen:endpoints')
+
+      // Open help
+      stdin.write('?')
+      await delay(50)
+      expect(lastFrame()).toContain('help:true')
+
+      // Close help
+      stdin.write('?')
+      await delay(50)
+      expect(lastFrame()).toContain('help:false')
+      expect(lastFrame()).toContain('fullscreen:endpoints')
+    })
   })
 })
