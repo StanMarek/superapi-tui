@@ -85,6 +85,8 @@ CLI entry point compiles to `./dist/cli.js`. The `bin` field in package.json map
 ### TUI Components
 
 - **Navigation:** `src/hooks/useNavigation.ts` — shared hook for panel focus (Tab/Shift+Tab), endpoint selection, text capture guard
+- **Navigation state:** `useNavigation` manages `fullscreenPanel` (PanelId | null) and `showHelp` (boolean). Input priority chain: textCapture → help overlay → `?` → quit → Esc-fullscreen → `f` → Tab
+- **HelpOverlay:** `src/components/HelpOverlay.tsx` — stateless overlay with keybinding sections, dismissed via `?` or `Esc`
 - **Panel types:** `PanelId = 'endpoints' | 'detail' | 'request'` — panels get `isFocused` prop, borders cyan when focused
 - **EndpointList:** Flat `ListRow` discriminated union model for cursor navigation, collapsible tag groups, `/` filter mode
 - **EndpointDetail:** Collapsible sections (Parameters, Request Body, Responses) with `sectionHeader`/`content` row model. Sub-components: `ParameterList`, `SchemaView` (recursive, self-managed cursor), `ResponseList`. Schema drill-down via `useSchemaNavigation` hook.
@@ -138,6 +140,7 @@ Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), 
 - `useInput` tests: write raw chars (`stdin.write('j')`) or escape sequences (`stdin.write('\t')`)
 - Bun `mock().mock.lastCall` is typed `[] | undefined` — use `as unknown as [T1, T2]` to access args
 - Integration tests importing `App.tsx` may show "File not found" in parallel runs — run individually with `bun test <file>`
+- Escape sequences: Escape=`\x1b`, Shift+Tab=`\x1b[Z`, Tab=`\t`
 
 ### Hook Testing
 
@@ -170,6 +173,7 @@ Vim-style keybindings throughout. Key globals: `Tab`/`Shift+Tab` (panel focus), 
 - Exhaustive switch defaults: use `never` type check in discriminated union switches to catch missing cases at compile time
 - Ink paste handling: use ref-backed edit buffer with debounced state sync (16ms) to prevent render storms — terminals may send paste char-by-char, causing one setState + re-render per character
 - Auth injection safety: `applyAuth` must skip setting headers/params when credential values are empty — sending `Authorization: Bearer ` (empty token) causes 401s
+- Overlay input isolation: when showing overlays (help, etc.), gate `isFocused` with `&& !showOverlay` — Ink `display="none"` hides rendering but `useInput({ isActive: isFocused })` still fires if `isFocused` is true
 
 ## Design Decisions
 
