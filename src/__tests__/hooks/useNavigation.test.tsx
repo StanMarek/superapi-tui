@@ -182,6 +182,23 @@ describe('useNavigation', () => {
       expect(lastFrame()).toContain('panel:detail')
     })
 
+    it('Shift+Tab exits fullscreen and cycles panel backward', async () => {
+      const { lastFrame, stdin } = render(<FullHarness />)
+
+      stdin.write('\t')
+      await delay(50)
+      expect(lastFrame()).toContain('panel:detail')
+
+      stdin.write('f')
+      await delay(50)
+      expect(lastFrame()).toContain('fullscreen:detail')
+
+      stdin.write('\x1b[Z') // Shift+Tab
+      await delay(50)
+      expect(lastFrame()).toContain('fullscreen:none')
+      expect(lastFrame()).toContain('panel:endpoints')
+    })
+
     it('f is suppressed during textCapture', async () => {
       const { lastFrame, stdin } = render(<TextCaptureHarness />)
 
@@ -271,6 +288,25 @@ describe('useNavigation', () => {
       stdin.write('\t')
       await delay(50)
       expect(lastFrame()).toContain('panel:detail')
+    })
+
+    it('? is suppressed during textCapture', async () => {
+      const { lastFrame, stdin } = render(<TextCaptureHarness />)
+
+      stdin.write('/')
+      await delay(50)
+      expect(lastFrame()).toContain('capture:true')
+
+      stdin.write('?')
+      await delay(50)
+      expect(lastFrame()).toContain('help:false')
+
+      // Exit text capture, then ? should work
+      stdin.write('\x1b') // Escape
+      await delay(50)
+      stdin.write('?')
+      await delay(50)
+      expect(lastFrame()).toContain('help:true')
     })
 
     it('help during fullscreen: closing help preserves fullscreen', async () => {

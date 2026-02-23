@@ -31,7 +31,7 @@ export default function App({ spec }: Props) {
           >
             <EndpointList
               tagGroups={spec.tagGroups}
-              isFocused={focusedPanel === 'endpoints'}
+              isFocused={focusedPanel === 'endpoints' && !showHelp}
               onSelectEndpoint={selectEndpoint}
               onTextCaptureChange={setTextCapture}
             />
@@ -46,7 +46,7 @@ export default function App({ spec }: Props) {
           >
             <EndpointDetail
               endpoint={selectedEndpoint}
-              isFocused={focusedPanel === 'detail'}
+              isFocused={focusedPanel === 'detail' && !showHelp}
               componentSchemas={spec.componentSchemas}
               onTextCaptureChange={setTextCapture}
             />
@@ -61,7 +61,7 @@ export default function App({ spec }: Props) {
           >
             <RequestPanel
               endpoint={selectedEndpoint}
-              isFocused={focusedPanel === 'request'}
+              isFocused={focusedPanel === 'request' && !showHelp}
               servers={spec.servers}
               securitySchemes={spec.securitySchemes}
               onTextCaptureChange={setTextCapture}
