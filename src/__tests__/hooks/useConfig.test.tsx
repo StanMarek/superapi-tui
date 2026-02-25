@@ -114,7 +114,7 @@ describe('useConfig', () => {
 // (the hook is a thin wrapper, so we verify the underlying logic)
 describe('config save + match integration', () => {
   test('save then load round-trip', async () => {
-    const configPath = join(tempDir, 'roundtrip.json')
+    const configPath = join(tempDir, 'roundtrip.toml')
     const data: ConfigData = {
       servers: [{ name: 'prod', url: 'https://prod.api.com', auth: { method: 'bearer', token: 'xyz' } }],
       preferences: { defaultResponseTab: 'raw' },
@@ -129,7 +129,7 @@ describe('config save + match integration', () => {
   })
 
   test('upsert by normalized URL', async () => {
-    const configPath = join(tempDir, 'upsert.json')
+    const configPath = join(tempDir, 'upsert.toml')
 
     // Save initial
     const initial: ConfigData = {
