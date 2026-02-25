@@ -21,8 +21,8 @@ interface Props {
 
 type State =
   | { readonly phase: 'launcher' }
-  | { readonly phase: 'loading'; readonly message: string; readonly specInput: string }
-  | { readonly phase: 'loaded'; readonly spec: ParsedSpec }
+  | { readonly phase: 'loading'; readonly message: string; readonly specInput: string; readonly savedRequestBaseUrl?: string }
+  | { readonly phase: 'loaded'; readonly spec: ParsedSpec; readonly specLoadUrl: string; readonly savedRequestBaseUrl?: string }
   | { readonly phase: 'error'; readonly message: string }
 
 export function SpecLoader({ input, deps, launcherDeps }: Props) {
@@ -37,6 +37,7 @@ export function SpecLoader({ input, deps, launcherDeps }: Props) {
 
   // Derived value: non-null only when we're in loading phase, stable across message updates
   const specInputForLoad = state.phase === 'loading' ? state.specInput : null
+  const savedRequestBaseUrlForLoad = state.phase === 'loading' ? state.savedRequestBaseUrl : undefined
 
   useEffect(() => {
     if (!specInputForLoad) return
@@ -49,11 +50,11 @@ export function SpecLoader({ input, deps, launcherDeps }: Props) {
         const result = await resolvedLoadSpec(target)
         if (cancelled) return
 
-        setState({ phase: 'loading', message: 'Parsing spec...', specInput: target })
+        setState({ phase: 'loading', message: 'Parsing spec...', specInput: target, savedRequestBaseUrl: savedRequestBaseUrlForLoad })
         const spec = await resolvedParseSpec(result.content)
         if (cancelled) return
 
-        setState({ phase: 'loaded', spec })
+        setState({ phase: 'loaded', spec, specLoadUrl: target, savedRequestBaseUrl: savedRequestBaseUrlForLoad })
       } catch (error) {
         if (cancelled) return
         const message = error instanceof Error ? error.message : String(error)
@@ -68,7 +69,7 @@ export function SpecLoader({ input, deps, launcherDeps }: Props) {
     return () => {
       cancelled = true
     }
-  }, [specInputForLoad])
+  }, [specInputForLoad, savedRequestBaseUrlForLoad])
 
   // Exit after showing error for a moment
   useEffect(() => {
@@ -81,8 +82,8 @@ export function SpecLoader({ input, deps, launcherDeps }: Props) {
     return () => clearTimeout(timer)
   }, [state, exit])
 
-  const handleLauncherSelect = useCallback((value: string) => {
-    setState({ phase: 'loading', message: `Loading spec from ${value}...`, specInput: value })
+  const handleLauncherSelect = useCallback((value: string, savedRequestBaseUrl?: string) => {
+    setState({ phase: 'loading', message: `Loading spec from ${value}...`, specInput: value, savedRequestBaseUrl })
   }, [])
 
   if (state.phase === 'launcher') {
@@ -108,5 +109,5 @@ export function SpecLoader({ input, deps, launcherDeps }: Props) {
     )
   }
 
-  return <App spec={state.spec} />
+  return <App spec={state.spec} specLoadUrl={state.specLoadUrl} savedRequestBaseUrl={state.savedRequestBaseUrl} />
 }

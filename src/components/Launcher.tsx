@@ -9,7 +9,7 @@ export interface LauncherDeps {
 }
 
 interface Props {
-  readonly onSelect: (input: string) => void
+  readonly onSelect: (input: string, savedRequestBaseUrl?: string) => void
   readonly deps?: LauncherDeps
 }
 
@@ -19,6 +19,7 @@ type Phase =
   | { readonly kind: 'url-input' }
 
 const MANUAL_ENTRY_VALUE = '__manual__'
+const SERVER_VALUE_PREFIX = '__server_'
 
 export function Launcher({ onSelect, deps }: Props) {
   const resolvedLoadConfig = deps?.loadConfig ?? defaultLoadConfig
@@ -53,11 +54,21 @@ export function Launcher({ onSelect, deps }: Props) {
     (value: string) => {
       if (value === MANUAL_ENTRY_VALUE) {
         setPhase({ kind: 'url-input' })
+      } else if (phase.kind === 'select' && value.startsWith(SERVER_VALUE_PREFIX)) {
+        const index = parseInt(value.slice(SERVER_VALUE_PREFIX.length), 10)
+        const server = phase.servers[index]
+        if (!server) return
+
+        const loadUrl = server.swaggerEndpointUrl ?? server.url ?? ''
+        if (!server.swaggerEndpointUrl) {
+          console.warn('superapi-tui: no swaggerEndpointUrl configured, falling back to url')
+        }
+        onSelect(loadUrl, server.url)
       } else {
         onSelect(value)
       }
     },
-    [onSelect],
+    [onSelect, phase],
   )
 
   const handleUrlSubmit = useCallback(
@@ -84,10 +95,13 @@ export function Launcher({ onSelect, deps }: Props) {
 
   if (phase.kind === 'select') {
     const options = [
-      ...phase.servers.map(s => ({
-        label: `${s.name} — ${s.url}`,
-        value: s.url,
-      })),
+      ...phase.servers.map((s, i) => {
+        const loadUrl = s.swaggerEndpointUrl ?? s.url ?? ''
+        return {
+          label: `${s.name} — ${loadUrl}`,
+          value: `${SERVER_VALUE_PREFIX}${i}`,
+        }
+      }),
       { label: 'Enter URL or file path...', value: MANUAL_ENTRY_VALUE },
     ]
 

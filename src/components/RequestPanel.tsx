@@ -15,10 +15,12 @@ interface Props {
   readonly servers: readonly ServerInfo[]
   readonly securitySchemes: readonly SecuritySchemeInfo[]
   readonly onTextCaptureChange?: (active: boolean) => void
-  readonly onSaveServerAuth?: (name: string, url: string, auth?: SavedAuth) => Promise<boolean>
+  readonly onSaveServerAuth?: (name: string, url: string, auth?: SavedAuth, swaggerEndpointUrl?: string) => Promise<boolean>
   readonly findAuthForServer?: (specServerUrl: string) => SavedAuth | null
   readonly configLoaded?: boolean
   readonly defaultResponseTab?: ResponseTab
+  readonly specLoadUrl?: string
+  readonly savedRequestBaseUrl?: string
 }
 
 type Row =
@@ -139,12 +141,14 @@ function credentialsToSavedAuth(creds: AuthCredentials): SavedAuth | null {
   }
 }
 
-export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, onTextCaptureChange, onSaveServerAuth, findAuthForServer, configLoaded, defaultResponseTab }: Props) {
+export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, onTextCaptureChange, onSaveServerAuth, findAuthForServer, configLoaded, defaultResponseTab, specLoadUrl, savedRequestBaseUrl }: Props) {
   const state = useRequestState(endpoint, securitySchemes, defaultResponseTab)
   const [editingParam, setEditingParam] = useState<string | null>(null)
   const [editingBody, setEditingBody] = useState(false)
   const [editingAuthField, setEditingAuthField] = useState<AuthFieldKey | null>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [saveNameBuffer, setSaveNameBuffer] = useState('')
   const initialAuthApplied = useRef(false)
 
   // Ref-backed edit buffer: ref is always current, state is debounced for display.
@@ -186,6 +190,33 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
 
   const selectedOption = state.auth.availableOptions[state.auth.selectedOptionIndex % state.auth.availableOptions.length]
 
+  const mergedServers = useMemo(() => {
+    if (!savedRequestBaseUrl) return servers
+
+    const normalizedSaved = savedRequestBaseUrl.replace(/\/+$/, '').toLowerCase()
+    const matchIndex = servers.findIndex(s => {
+      const resolved = resolveServerUrl(s)
+      return resolved.replace(/\/+$/, '').toLowerCase() === normalizedSaved
+    })
+
+    if (matchIndex > 0) {
+      // Move matching server to index 0 so it's pre-selected
+      const reordered = [...servers]
+      const [matched] = reordered.splice(matchIndex, 1)
+      return [matched, ...reordered]
+    }
+
+    if (matchIndex === 0) return servers
+
+    // Not found — inject as first server
+    const injectedServer: ServerInfo = {
+      url: savedRequestBaseUrl,
+      description: 'Saved override',
+      variables: new Map(),
+    }
+    return [injectedServer, ...servers]
+  }, [servers, savedRequestBaseUrl])
+
   const rows = useMemo(
     () => (endpoint ? buildRows(endpoint, state.auth.authExpanded, selectedOption?.method) : []),
     [endpoint, state.auth.authExpanded, selectedOption?.method],
@@ -193,7 +224,7 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
 
   const { cursorIndex, moveUp, moveDown, moveToTop, moveToBottom } = useScrollableList(rows.length)
 
-  const isTextCapturing = editingParam !== null || editingBody || editingAuthField !== null
+  const isTextCapturing = editingParam !== null || editingBody || editingAuthField !== null || savingProfile
 
   useEffect(() => {
     onTextCaptureChange?.(isTextCapturing)
@@ -209,10 +240,10 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
 
   // Initial auth restoration from config
   useEffect(() => {
-    if (initialAuthApplied.current || !findAuthForServer || servers.length === 0) return
+    if (initialAuthApplied.current || !findAuthForServer || mergedServers.length === 0) return
 
-    const serverIdx = servers.length > 0 ? state.selectedServerIndex % servers.length : -1
-    const currentServer = serverIdx >= 0 ? servers[serverIdx] : null
+    const serverIdx = mergedServers.length > 0 ? state.selectedServerIndex % mergedServers.length : -1
+    const currentServer = serverIdx >= 0 ? mergedServers[serverIdx] : null
     if (!currentServer) return
 
     const serverUrl = resolveServerUrl(currentServer)
@@ -221,10 +252,54 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
       state.auth.restoreAuth(savedAuth)
       initialAuthApplied.current = true
     }
-  }, [servers, findAuthForServer, configLoaded, state.selectedServerIndex])
+  }, [mergedServers, findAuthForServer, configLoaded, state.selectedServerIndex])
 
   useInput(
     (input, key) => {
+      // Save profile name editing mode
+      if (savingProfile) {
+        if (key.return) {
+          const trimmedName = saveNameBuffer.trim()
+          if (trimmedName.length > 0 && onSaveServerAuth && mergedServers.length > 0) {
+            const serverIdx = state.selectedServerIndex % mergedServers.length
+            const server = mergedServers[serverIdx]
+            if (server) {
+              const serverUrl = resolveServerUrl(server)
+              const savedAuth = credentialsToSavedAuth(state.auth.credentials)
+              onSaveServerAuth(trimmedName, serverUrl, savedAuth ?? undefined, specLoadUrl)
+                .then(ok => {
+                  if (ok) {
+                    setSaveMessage(`Saved to ${getConfigPath()}`)
+                  } else {
+                    setSaveMessage('Failed to save config')
+                  }
+                  setTimeout(() => setSaveMessage(null), 2000)
+                })
+                .catch(() => {
+                  setSaveMessage('Failed to save config')
+                  setTimeout(() => setSaveMessage(null), 2000)
+                })
+            }
+          }
+          setSavingProfile(false)
+          setSaveNameBuffer('')
+          return
+        }
+        if (key.escape) {
+          setSavingProfile(false)
+          setSaveNameBuffer('')
+          return
+        }
+        if (key.backspace || key.delete) {
+          setSaveNameBuffer(prev => prev.slice(0, -1))
+          return
+        }
+        if (input && !key.ctrl && !key.meta) {
+          setSaveNameBuffer(prev => prev + input)
+        }
+        return
+      }
+
       // Auth field editing mode
       if (editingAuthField !== null) {
         if (key.return || key.escape) {
@@ -329,7 +404,7 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
 
       // Send request
       if (input === 's') {
-        state.send(servers)
+        state.send(mergedServers)
         return
       }
 
@@ -342,21 +417,14 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
 
       // Save server + auth to config
       if (input === 'W') {
-        if (onSaveServerAuth && servers.length > 0) {
-          const serverIdx = state.selectedServerIndex % servers.length
-          const server = servers[serverIdx]
+        if (onSaveServerAuth && mergedServers.length > 0) {
+          const serverIdx = state.selectedServerIndex % mergedServers.length
+          const server = mergedServers[serverIdx]
           if (server) {
             const serverUrl = resolveServerUrl(server)
-            const savedAuth = credentialsToSavedAuth(state.auth.credentials)
-            const serverName = server.description ?? serverUrl
-            onSaveServerAuth(serverName, serverUrl, savedAuth ?? undefined).then(ok => {
-              if (ok) {
-                setSaveMessage(`Saved to ${getConfigPath()}`)
-              } else {
-                setSaveMessage('Failed to save config')
-              }
-              setTimeout(() => setSaveMessage(null), 2000)
-            })
+            const defaultName = server.description ?? serverUrl
+            setSaveNameBuffer(defaultName)
+            setSavingProfile(true)
           }
         }
         return
@@ -385,7 +453,7 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
           return
         }
         if (row?.type === 'send') {
-          state.send(servers)
+          state.send(mergedServers)
           return
         }
       }
@@ -428,8 +496,8 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
     )
   }
 
-  const serverIdx = servers.length > 0 ? state.selectedServerIndex % servers.length : -1
-  const currentServer = serverIdx >= 0 ? servers[serverIdx] : null
+  const serverIdx = mergedServers.length > 0 ? state.selectedServerIndex % mergedServers.length : -1
+  const currentServer = serverIdx >= 0 ? mergedServers[serverIdx] : null
 
   return (
     <Box flexDirection="column" padding={1}>
@@ -443,6 +511,14 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
         <Text color="green">{saveMessage}</Text>
       )}
 
+      {savingProfile && (
+        <Box marginTop={1}>
+          <Text>Profile name: </Text>
+          <Text color="cyan">{saveNameBuffer}<Text color="yellow">|</Text></Text>
+          <Text dimColor> (Enter to save, Esc to cancel)</Text>
+        </Box>
+      )}
+
       {rows.map((row, index) => {
         const isSelected = index === cursorIndex && isFocused
 
@@ -450,11 +526,11 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
           return (
             <Box key="server" marginTop={1}>
               <Text inverse={isSelected} dimColor={!isFocused}>
-                {servers.length === 0
+                {mergedServers.length === 0
                   ? 'No servers defined'
                   : `Server: ${currentServer ? resolveServerUrl(currentServer) : ''}`}
               </Text>
-              {servers.length > 1 && <Text dimColor> (S to cycle)</Text>}
+              {mergedServers.length > 1 && <Text dimColor> (S to cycle)</Text>}
             </Box>
           )
         }

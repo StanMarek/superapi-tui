@@ -1,11 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import type { ConfigData, SavedAuth, Preferences } from '@/config/index.js'
+import type { ConfigData, SavedAuth, SavedServer, Preferences } from '@/config/index.js'
 import { DEFAULT_CONFIG, DEFAULT_PREFERENCES, loadConfig, saveConfig, matchServerAuth, normalizeUrl } from '@/config/index.js'
 
 export interface ConfigState {
   readonly config: ConfigData | null
   readonly isLoading: boolean
-  readonly saveServerAuth: (name: string, url: string, auth?: SavedAuth) => Promise<boolean>
+  readonly saveServerAuth: (name: string, url: string, auth?: SavedAuth, swaggerEndpointUrl?: string) => Promise<boolean>
   readonly findAuthForServer: (specServerUrl: string) => SavedAuth | null
   readonly preferences: Preferences
 }
@@ -38,15 +38,20 @@ export function useConfig(): ConfigState {
     return () => { cancelled = true }
   }, [])
 
-  const saveServerAuth = useCallback(async (name: string, url: string, auth?: SavedAuth): Promise<boolean> => {
+  const saveServerAuth = useCallback(async (name: string, url: string, auth?: SavedAuth, swaggerEndpointUrl?: string): Promise<boolean> => {
     const current = configRef.current ?? DEFAULT_CONFIG
     const normalizedUrl = normalizeUrl(url)
 
     const existingIndex = current.servers.findIndex(
-      s => normalizeUrl(s.url) === normalizedUrl,
+      s => s.url !== undefined && normalizeUrl(s.url) === normalizedUrl,
     )
 
-    const serverEntry = auth ? { name, url, auth } : { name, url }
+    const serverEntry: SavedServer = {
+      name,
+      ...(swaggerEndpointUrl !== undefined ? { swaggerEndpointUrl } : {}),
+      url,
+      ...(auth !== undefined ? { auth } : {}),
+    }
 
     let updatedServers: typeof current.servers
     if (existingIndex >= 0) {
