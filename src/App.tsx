@@ -8,9 +8,11 @@ import type { ParsedSpec } from '@/types/index.js'
 
 interface Props {
   readonly spec: ParsedSpec
+  readonly specLoadUrl?: string
+  readonly savedRequestBaseUrl?: string
 }
 
-export default function App({ spec }: Props) {
+export default function App({ spec, specLoadUrl, savedRequestBaseUrl }: Props) {
   const { focusedPanel, selectedEndpoint, selectEndpoint, setTextCapture, fullscreenPanel, showHelp } = useNavigation()
   const { saveServerAuth, findAuthForServer, preferences, isLoading: configLoading } = useConfig()
 
@@ -70,6 +72,8 @@ export default function App({ spec }: Props) {
               findAuthForServer={findAuthForServer}
               configLoaded={!configLoading}
               defaultResponseTab={preferences.defaultResponseTab}
+              specLoadUrl={specLoadUrl}
+              savedRequestBaseUrl={savedRequestBaseUrl}
             />
           </Box>
         )}

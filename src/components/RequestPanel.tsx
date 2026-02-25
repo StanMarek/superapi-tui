@@ -15,10 +15,12 @@ interface Props {
   readonly servers: readonly ServerInfo[]
   readonly securitySchemes: readonly SecuritySchemeInfo[]
   readonly onTextCaptureChange?: (active: boolean) => void
-  readonly onSaveServerAuth?: (name: string, url: string, auth?: SavedAuth) => Promise<boolean>
+  readonly onSaveServerAuth?: (name: string, url: string, auth?: SavedAuth, swaggerEndpointUrl?: string) => Promise<boolean>
   readonly findAuthForServer?: (specServerUrl: string) => SavedAuth | null
   readonly configLoaded?: boolean
   readonly defaultResponseTab?: ResponseTab
+  readonly specLoadUrl?: string
+  readonly savedRequestBaseUrl?: string
 }
 
 type Row =
@@ -139,7 +141,7 @@ function credentialsToSavedAuth(creds: AuthCredentials): SavedAuth | null {
   }
 }
 
-export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, onTextCaptureChange, onSaveServerAuth, findAuthForServer, configLoaded, defaultResponseTab }: Props) {
+export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, onTextCaptureChange, onSaveServerAuth, findAuthForServer, configLoaded, defaultResponseTab, specLoadUrl, savedRequestBaseUrl }: Props) {
   const state = useRequestState(endpoint, securitySchemes, defaultResponseTab)
   const [editingParam, setEditingParam] = useState<string | null>(null)
   const [editingBody, setEditingBody] = useState(false)
