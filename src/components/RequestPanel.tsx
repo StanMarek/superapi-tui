@@ -190,6 +190,25 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
 
   const selectedOption = state.auth.availableOptions[state.auth.selectedOptionIndex % state.auth.availableOptions.length]
 
+  const mergedServers = useMemo(() => {
+    if (!savedRequestBaseUrl) return servers
+
+    const normalizedSaved = savedRequestBaseUrl.replace(/\/+$/, '').toLowerCase()
+    const alreadyExists = servers.some(s => {
+      const resolved = resolveServerUrl(s)
+      return resolved.replace(/\/+$/, '').toLowerCase() === normalizedSaved
+    })
+
+    if (alreadyExists) return servers
+
+    const injectedServer: ServerInfo = {
+      url: savedRequestBaseUrl,
+      description: 'Saved override',
+      variables: new Map(),
+    }
+    return [injectedServer, ...servers]
+  }, [servers, savedRequestBaseUrl])
+
   const rows = useMemo(
     () => (endpoint ? buildRows(endpoint, state.auth.authExpanded, selectedOption?.method) : []),
     [endpoint, state.auth.authExpanded, selectedOption?.method],
@@ -213,10 +232,10 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
 
   // Initial auth restoration from config
   useEffect(() => {
-    if (initialAuthApplied.current || !findAuthForServer || servers.length === 0) return
+    if (initialAuthApplied.current || !findAuthForServer || mergedServers.length === 0) return
 
-    const serverIdx = servers.length > 0 ? state.selectedServerIndex % servers.length : -1
-    const currentServer = serverIdx >= 0 ? servers[serverIdx] : null
+    const serverIdx = mergedServers.length > 0 ? state.selectedServerIndex % mergedServers.length : -1
+    const currentServer = serverIdx >= 0 ? mergedServers[serverIdx] : null
     if (!currentServer) return
 
     const serverUrl = resolveServerUrl(currentServer)
@@ -225,7 +244,7 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
       state.auth.restoreAuth(savedAuth)
       initialAuthApplied.current = true
     }
-  }, [servers, findAuthForServer, configLoaded, state.selectedServerIndex])
+  }, [mergedServers, findAuthForServer, configLoaded, state.selectedServerIndex])
 
   useInput(
     (input, key) => {
@@ -233,9 +252,9 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
       if (savingProfile) {
         if (key.return) {
           const trimmedName = saveNameBuffer.trim()
-          if (trimmedName.length > 0 && onSaveServerAuth && servers.length > 0) {
-            const serverIdx = state.selectedServerIndex % servers.length
-            const server = servers[serverIdx]
+          if (trimmedName.length > 0 && onSaveServerAuth && mergedServers.length > 0) {
+            const serverIdx = state.selectedServerIndex % mergedServers.length
+            const server = mergedServers[serverIdx]
             if (server) {
               const serverUrl = resolveServerUrl(server)
               const savedAuth = credentialsToSavedAuth(state.auth.credentials)
@@ -372,7 +391,7 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
 
       // Send request
       if (input === 's') {
-        state.send(servers)
+        state.send(mergedServers)
         return
       }
 
@@ -385,9 +404,9 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
 
       // Save server + auth to config
       if (input === 'W') {
-        if (onSaveServerAuth && servers.length > 0) {
-          const serverIdx = state.selectedServerIndex % servers.length
-          const server = servers[serverIdx]
+        if (onSaveServerAuth && mergedServers.length > 0) {
+          const serverIdx = state.selectedServerIndex % mergedServers.length
+          const server = mergedServers[serverIdx]
           if (server) {
             const serverUrl = resolveServerUrl(server)
             const defaultName = server.description ?? serverUrl
@@ -421,7 +440,7 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
           return
         }
         if (row?.type === 'send') {
-          state.send(servers)
+          state.send(mergedServers)
           return
         }
       }
@@ -464,8 +483,8 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
     )
   }
 
-  const serverIdx = servers.length > 0 ? state.selectedServerIndex % servers.length : -1
-  const currentServer = serverIdx >= 0 ? servers[serverIdx] : null
+  const serverIdx = mergedServers.length > 0 ? state.selectedServerIndex % mergedServers.length : -1
+  const currentServer = serverIdx >= 0 ? mergedServers[serverIdx] : null
 
   return (
     <Box flexDirection="column" padding={1}>
@@ -494,11 +513,11 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
           return (
             <Box key="server" marginTop={1}>
               <Text inverse={isSelected} dimColor={!isFocused}>
-                {servers.length === 0
+                {mergedServers.length === 0
                   ? 'No servers defined'
                   : `Server: ${currentServer ? resolveServerUrl(currentServer) : ''}`}
               </Text>
-              {servers.length > 1 && <Text dimColor> (S to cycle)</Text>}
+              {mergedServers.length > 1 && <Text dimColor> (S to cycle)</Text>}
             </Box>
           )
         }

@@ -933,3 +933,135 @@ describe('RequestPanel - save profile', () => {
     expect(lastFrame()).toContain('Saved to')
   })
 })
+
+describe('RequestPanel - saved request base URL injection', () => {
+  test('savedRequestBaseUrl appears as server when not in spec servers', async () => {
+    const { lastFrame } = render(
+      <RequestPanel
+        endpoint={makeEndpoint()}
+        isFocused={true}
+        servers={defaultServers}
+        securitySchemes={[]}
+        savedRequestBaseUrl="https://saved-override.example.com"
+      />,
+    )
+    await delay(50)
+
+    // The saved URL should be the displayed server (injected at index 0)
+    expect(lastFrame()).toContain('https://saved-override.example.com')
+  })
+
+  test('savedRequestBaseUrl is pre-selected as default server', async () => {
+    const servers: ServerInfo[] = [
+      { url: 'https://api.example.com', variables: new Map() },
+      { url: 'https://staging.example.com', variables: new Map() },
+    ]
+    const { lastFrame } = render(
+      <RequestPanel
+        endpoint={makeEndpoint()}
+        isFocused={true}
+        servers={servers}
+        securitySchemes={[]}
+        savedRequestBaseUrl="https://saved-override.example.com"
+      />,
+    )
+    await delay(50)
+
+    // Saved URL should be shown as current server (it's injected at index 0)
+    expect(lastFrame()).toContain('https://saved-override.example.com')
+    expect(lastFrame()).not.toContain('https://api.example.com')
+  })
+
+  test('savedRequestBaseUrl is not duplicated when it matches a spec server', async () => {
+    const { lastFrame, stdin } = render(
+      <RequestPanel
+        endpoint={makeEndpoint()}
+        isFocused={true}
+        servers={defaultServers}
+        securitySchemes={[]}
+        savedRequestBaseUrl="https://api.example.com"
+      />,
+    )
+    await delay(50)
+
+    // Should show the matching server
+    expect(lastFrame()).toContain('https://api.example.com')
+
+    // Cycle — should NOT show saved URL as a separate entry
+    // With one spec server + no duplicate injection, cycling should wrap back to the same
+    stdin.write('S')
+    await delay(50)
+    expect(lastFrame()).toContain('https://api.example.com')
+  })
+
+  test('cycling through servers includes injected savedRequestBaseUrl', async () => {
+    const { lastFrame, stdin } = render(
+      <RequestPanel
+        endpoint={makeEndpoint()}
+        isFocused={true}
+        servers={defaultServers}
+        securitySchemes={[]}
+        savedRequestBaseUrl="https://saved-override.example.com"
+      />,
+    )
+    await delay(50)
+
+    // Initially shows saved URL (index 0)
+    expect(lastFrame()).toContain('https://saved-override.example.com')
+
+    // Cycle to next (spec server)
+    stdin.write('S')
+    await delay(50)
+    expect(lastFrame()).toContain('https://api.example.com')
+
+    // Cycle back to saved
+    stdin.write('S')
+    await delay(50)
+    expect(lastFrame()).toContain('https://saved-override.example.com')
+  })
+
+  test('send request uses injected savedRequestBaseUrl', async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response('{"ok": true}', {
+        status: 200,
+        statusText: 'OK',
+      })),
+    ) as unknown as typeof fetch
+
+    const { lastFrame, stdin } = render(
+      <RequestPanel
+        endpoint={makeEndpoint()}
+        isFocused={true}
+        servers={defaultServers}
+        securitySchemes={[]}
+        savedRequestBaseUrl="https://saved-override.example.com"
+      />,
+    )
+    await delay(50)
+
+    // Send request (should use the injected server at index 0)
+    stdin.write('s')
+    await delay(300)
+
+    expect(lastFrame()).toContain('200')
+
+    // Verify fetch was called with the saved URL
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof mock>
+    const callArgs = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(callArgs[0]).toContain('https://saved-override.example.com')
+  })
+
+  test('no injection when savedRequestBaseUrl is undefined', () => {
+    const { lastFrame } = render(
+      <RequestPanel
+        endpoint={makeEndpoint()}
+        isFocused={true}
+        servers={defaultServers}
+        securitySchemes={[]}
+      />,
+    )
+
+    // Should show spec server as normal
+    expect(lastFrame()).toContain('https://api.example.com')
+  })
+})
