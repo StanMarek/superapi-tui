@@ -425,3 +425,45 @@ describe('loadConfig TOML', () => {
     expect(result).toEqual(DEFAULT_CONFIG)
   })
 })
+
+describe('loadConfig fallback', () => {
+  test('falls back to JSON when TOML absent', async () => {
+    const tomlPath = join(tempDir, 'config.toml')
+    const jsonPath = join(tempDir, 'config.json')
+    await Bun.write(jsonPath, JSON.stringify({
+      servers: [{ name: 'json-server', url: 'https://json.com' }],
+    }))
+
+    const result = await loadConfig(tomlPath, jsonPath)
+
+    expect(result.servers).toHaveLength(1)
+    expect(result.servers[0]!.name).toBe('json-server')
+  })
+
+  test('TOML takes precedence when both exist', async () => {
+    const tomlPath = join(tempDir, 'config.toml')
+    const jsonPath = join(tempDir, 'config.json')
+    await Bun.write(tomlPath, [
+      '[[servers]]',
+      'name = "toml-server"',
+      'url = "https://toml.com"',
+    ].join('\n'))
+    await Bun.write(jsonPath, JSON.stringify({
+      servers: [{ name: 'json-server', url: 'https://json.com' }],
+    }))
+
+    const result = await loadConfig(tomlPath, jsonPath)
+
+    expect(result.servers).toHaveLength(1)
+    expect(result.servers[0]!.name).toBe('toml-server')
+  })
+
+  test('returns defaults when neither TOML nor JSON exist', async () => {
+    const tomlPath = join(tempDir, 'missing.toml')
+    const jsonPath = join(tempDir, 'missing.json')
+
+    const result = await loadConfig(tomlPath, jsonPath)
+
+    expect(result).toEqual(DEFAULT_CONFIG)
+  })
+})
