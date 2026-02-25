@@ -142,7 +142,7 @@ describe('config save + match integration', () => {
     const loaded = await loadConfig(configPath)
     const normalizedUrl = 'https://api.com'
     const existingIndex = loaded.servers.findIndex(
-      s => s.url.replace(/\/+$/, '').toLowerCase() === normalizedUrl,
+      s => s.url !== undefined && s.url.replace(/\/+$/, '').toLowerCase() === normalizedUrl,
     )
     expect(existingIndex).toBe(0)
 
@@ -157,6 +157,25 @@ describe('config save + match integration', () => {
     if (final.servers[0]!.auth?.method === 'bearer') {
       expect(final.servers[0]!.auth.token).toBe('second')
     }
+  })
+
+  test('save with swaggerEndpointUrl round-trip', async () => {
+    const configPath = join(tempDir, 'swagger-save.toml')
+    const data: ConfigData = {
+      servers: [{
+        name: 'api',
+        swaggerEndpointUrl: 'https://api.com/swagger.json',
+        url: 'https://api.com',
+        auth: { method: 'bearer', token: 'tok' },
+      }],
+      preferences: { defaultResponseTab: 'pretty' },
+    }
+
+    await saveConfig(data, configPath)
+    const loaded = await loadConfig(configPath)
+
+    expect(loaded.servers[0]!.swaggerEndpointUrl).toBe('https://api.com/swagger.json')
+    expect(loaded.servers[0]!.url).toBe('https://api.com')
   })
 
   test('matchServerAuth finds saved auth after save', async () => {
