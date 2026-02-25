@@ -293,34 +293,57 @@ describe('loadConfig', () => {
 })
 
 describe('saveConfig', () => {
-  test('writes config to file', async () => {
+  test('writes TOML config to file', async () => {
+    const tomlPath = join(tempDir, 'config.toml')
     const data = {
       servers: [{ name: 'prod', url: 'https://prod.api.com', auth: { method: 'bearer' as const, token: 'xyz' } }],
       preferences: { defaultResponseTab: 'raw' as const },
     }
 
-    await saveConfig(data, configPath)
+    await saveConfig(data, tomlPath)
 
-    const written = await Bun.file(configPath).text()
-    const parsed = JSON.parse(written)
-    expect(parsed.servers[0].name).toBe('prod')
-    expect(parsed.preferences.defaultResponseTab).toBe('raw')
+    const written = await Bun.file(tomlPath).text()
+    expect(written).toContain('[[servers]]')
+    expect(written).toContain('name = "prod"')
+    expect(written).toContain('method = "bearer"')
+    expect(written).toContain('token = "xyz"')
   })
 
-  test('writes pretty-printed JSON with trailing newline', async () => {
-    await saveConfig(DEFAULT_CONFIG, configPath)
+  test('writes TOML with trailing newline', async () => {
+    const tomlPath = join(tempDir, 'config.toml')
+    await saveConfig(DEFAULT_CONFIG, tomlPath)
 
-    const written = await Bun.file(configPath).text()
+    const written = await Bun.file(tomlPath).text()
     expect(written).toEndWith('\n')
-    expect(written).toContain('  ')
+  })
+
+  test('TOML save then load round-trip', async () => {
+    const tomlPath = join(tempDir, 'roundtrip.toml')
+    const data = {
+      servers: [
+        { name: 'prod', url: 'https://prod.api.com', auth: { method: 'bearer' as const, token: 'xyz' } },
+        { name: 'dev', url: 'https://dev.api.com' },
+      ],
+      preferences: { defaultResponseTab: 'headers' as const },
+    }
+
+    await saveConfig(data, tomlPath)
+    const loaded = await loadConfig(tomlPath)
+
+    expect(loaded.servers).toHaveLength(2)
+    expect(loaded.servers[0]!.name).toBe('prod')
+    expect(loaded.servers[0]!.auth).toEqual({ method: 'bearer', token: 'xyz' })
+    expect(loaded.servers[1]!.name).toBe('dev')
+    expect(loaded.servers[1]!.auth).toBeUndefined()
+    expect(loaded.preferences.defaultResponseTab).toBe('headers')
   })
 
   test('throws ConfigError on write failure', async () => {
-    const badPath = '/nonexistent-dir-12345/config.json'
+    const badPath = '/nonexistent-dir-12345/config.toml'
 
     try {
       await saveConfig(DEFAULT_CONFIG, badPath)
-      expect(true).toBe(false) // should not reach
+      expect(true).toBe(false)
     } catch (err) {
       expect(err).toBeInstanceOf(ConfigError)
       expect((err as ConfigError).message).toContain('Failed to write config file')

@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { chmod } from 'node:fs/promises'
-import { parse as parseToml } from 'smol-toml'
+import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
 import type { ConfigData, SavedServer, SavedAuth, Preferences } from './types.js'
 import { DEFAULT_CONFIG, DEFAULT_PREFERENCES } from './types.js'
 import { ConfigError } from './errors.js'
@@ -101,10 +101,22 @@ export async function saveConfig(data: ConfigData, configPath?: string): Promise
   const path = configPath ?? getConfigPath()
 
   try {
-    await Bun.write(path, JSON.stringify(data, null, 2) + '\n')
+    const plain = toPlainObject(data)
+    await Bun.write(path, stringifyToml(plain) + '\n')
     await chmod(path, 0o600)
   } catch (err) {
     throw new ConfigError(`Failed to write config file: ${path}`, err)
+  }
+}
+
+function toPlainObject(data: ConfigData): Record<string, unknown> {
+  return {
+    servers: data.servers.map(s => {
+      const server: Record<string, unknown> = { name: s.name, url: s.url }
+      if (s.auth !== undefined) server.auth = { ...s.auth }
+      return server
+    }),
+    preferences: { ...data.preferences },
   }
 }
 
