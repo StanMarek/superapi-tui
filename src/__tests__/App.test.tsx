@@ -56,11 +56,14 @@ describe('App', () => {
     expect(frame).toContain('Request / Response')
   })
 
-  it('renders endpoint list content', () => {
+  it('renders endpoint list with collapsed groups', () => {
     const { lastFrame } = render(<App spec={minimalSpec} />)
     const frame = lastFrame()!
-    expect(frame).toContain('GET')
-    expect(frame).toContain('/health')
+    // Tag groups start collapsed — verify collapsed indicator and tag name
+    expect(frame).toContain('\u25B6') // ▶ collapsed indicator
+    expect(frame).toContain('default')
+    // Individual endpoints should NOT be visible when collapsed
+    expect(frame).not.toContain('/health')
   })
 
   it('shows "No endpoint selected" in detail and request panels', () => {
