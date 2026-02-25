@@ -50,7 +50,7 @@ export function SpecLoader({ input, deps, launcherDeps }: Props) {
         const result = await resolvedLoadSpec(target)
         if (cancelled) return
 
-        setState({ phase: 'loading', message: 'Parsing spec...', specInput: target })
+        setState({ phase: 'loading', message: 'Parsing spec...', specInput: target, savedRequestBaseUrl: savedRequestBaseUrlForLoad })
         const spec = await resolvedParseSpec(result.content)
         if (cancelled) return
 

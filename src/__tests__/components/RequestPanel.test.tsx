@@ -1051,6 +1051,28 @@ describe('RequestPanel - saved request base URL injection', () => {
     expect(callArgs[0]).toContain('https://saved-override.example.com')
   })
 
+  test('savedRequestBaseUrl matching non-first spec server is preselected', async () => {
+    const servers: ServerInfo[] = [
+      { url: 'https://api.example.com', variables: new Map() },
+      { url: 'https://staging.example.com', variables: new Map() },
+      { url: 'https://saved.example.com', variables: new Map() },
+    ]
+    const { lastFrame } = render(
+      <RequestPanel
+        endpoint={makeEndpoint()}
+        isFocused={true}
+        servers={servers}
+        securitySchemes={[]}
+        savedRequestBaseUrl="https://staging.example.com"
+      />,
+    )
+    await delay(50)
+
+    // staging server should be reordered to index 0 and displayed
+    expect(lastFrame()).toContain('https://staging.example.com')
+    expect(lastFrame()).not.toContain('https://api.example.com')
+  })
+
   test('no injection when savedRequestBaseUrl is undefined', () => {
     const { lastFrame } = render(
       <RequestPanel

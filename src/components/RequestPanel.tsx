@@ -194,13 +194,21 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
     if (!savedRequestBaseUrl) return servers
 
     const normalizedSaved = savedRequestBaseUrl.replace(/\/+$/, '').toLowerCase()
-    const alreadyExists = servers.some(s => {
+    const matchIndex = servers.findIndex(s => {
       const resolved = resolveServerUrl(s)
       return resolved.replace(/\/+$/, '').toLowerCase() === normalizedSaved
     })
 
-    if (alreadyExists) return servers
+    if (matchIndex > 0) {
+      // Move matching server to index 0 so it's pre-selected
+      const reordered = [...servers]
+      const [matched] = reordered.splice(matchIndex, 1)
+      return [matched, ...reordered]
+    }
 
+    if (matchIndex === 0) return servers
+
+    // Not found — inject as first server
     const injectedServer: ServerInfo = {
       url: savedRequestBaseUrl,
       description: 'Saved override',
