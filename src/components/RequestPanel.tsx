@@ -258,14 +258,19 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
             if (server) {
               const serverUrl = resolveServerUrl(server)
               const savedAuth = credentialsToSavedAuth(state.auth.credentials)
-              onSaveServerAuth(trimmedName, serverUrl, savedAuth ?? undefined, specLoadUrl).then(ok => {
-                if (ok) {
-                  setSaveMessage(`Saved to ${getConfigPath()}`)
-                } else {
+              onSaveServerAuth(trimmedName, serverUrl, savedAuth ?? undefined, specLoadUrl)
+                .then(ok => {
+                  if (ok) {
+                    setSaveMessage(`Saved to ${getConfigPath()}`)
+                  } else {
+                    setSaveMessage('Failed to save config')
+                  }
+                  setTimeout(() => setSaveMessage(null), 2000)
+                })
+                .catch(() => {
                   setSaveMessage('Failed to save config')
-                }
-                setTimeout(() => setSaveMessage(null), 2000)
-              })
+                  setTimeout(() => setSaveMessage(null), 2000)
+                })
             }
           }
           setSavingProfile(false)

@@ -69,7 +69,7 @@ export function SpecLoader({ input, deps, launcherDeps }: Props) {
     return () => {
       cancelled = true
     }
-  }, [specInputForLoad])
+  }, [specInputForLoad, savedRequestBaseUrlForLoad])
 
   // Exit after showing error for a moment
   useEffect(() => {
