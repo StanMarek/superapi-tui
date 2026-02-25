@@ -779,7 +779,7 @@ describe('RequestPanel - save profile', () => {
 
   test('Enter in save-name mode triggers save with entered name', async () => {
     const onSave = mock((_name: string, _url: string, _auth?: SavedAuth, _swaggerUrl?: string) => Promise.resolve(true))
-    const { lastFrame, stdin } = render(
+    const { stdin } = render(
       <RequestPanel
         endpoint={makeEndpoint()}
         isFocused={true}
