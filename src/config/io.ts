@@ -6,6 +6,10 @@ import { DEFAULT_CONFIG, DEFAULT_PREFERENCES } from './types.js'
 import { ConfigError } from './errors.js'
 
 export function getConfigPath(): string {
+  return join(homedir(), '.superapi-tui.toml')
+}
+
+export function getJsonConfigPath(): string {
   return join(homedir(), '.superapi-tui.json')
 }
 

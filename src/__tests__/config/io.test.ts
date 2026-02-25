@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { mkdtemp, rm } from 'node:fs/promises'
-import { loadConfig, saveConfig } from '@/config/io.js'
+import { loadConfig, saveConfig, getConfigPath, getJsonConfigPath } from '@/config/io.js'
 import { DEFAULT_CONFIG } from '@/config/types.js'
 import { ConfigError } from '@/config/errors.js'
 
@@ -325,5 +325,19 @@ describe('saveConfig', () => {
       expect(err).toBeInstanceOf(ConfigError)
       expect((err as ConfigError).message).toContain('Failed to write config file')
     }
+  })
+})
+
+describe('getConfigPath', () => {
+  test('returns TOML path in home directory', () => {
+    const path = getConfigPath()
+    expect(path).toEndWith('.superapi-tui.toml')
+  })
+})
+
+describe('getJsonConfigPath', () => {
+  test('returns JSON path in home directory', () => {
+    const path = getJsonConfigPath()
+    expect(path).toEndWith('.superapi-tui.json')
   })
 })
