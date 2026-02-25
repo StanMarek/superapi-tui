@@ -102,7 +102,10 @@ export async function saveConfig(data: ConfigData, configPath?: string): Promise
 
   try {
     const plain = toPlainObject(data)
-    await Bun.write(path, stringifyToml(plain) + '\n')
+    const content = path.endsWith('.json')
+      ? JSON.stringify(plain, null, 2) + '\n'
+      : stringifyToml(plain) + '\n'
+    await Bun.write(path, content)
     await chmod(path, 0o600)
   } catch (err) {
     throw new ConfigError(`Failed to write config file: ${path}`, err)

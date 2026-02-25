@@ -338,6 +338,39 @@ describe('saveConfig', () => {
     expect(loaded.preferences.defaultResponseTab).toBe('headers')
   })
 
+  test('writes JSON when path ends with .json', async () => {
+    const jsonPath = join(tempDir, 'config.json')
+    const data = {
+      servers: [{ name: 'prod', url: 'https://prod.api.com', auth: { method: 'bearer' as const, token: 'xyz' } }],
+      preferences: { defaultResponseTab: 'raw' as const },
+    }
+
+    await saveConfig(data, jsonPath)
+
+    const written = await Bun.file(jsonPath).text()
+    const parsed = JSON.parse(written)
+    expect(parsed.servers[0].name).toBe('prod')
+    expect(parsed.preferences.defaultResponseTab).toBe('raw')
+  })
+
+  test('JSON save then load round-trip via explicit path', async () => {
+    const jsonPath = join(tempDir, 'roundtrip.json')
+    const data = {
+      servers: [
+        { name: 'prod', url: 'https://prod.api.com', auth: { method: 'bearer' as const, token: 'xyz' } },
+      ],
+      preferences: { defaultResponseTab: 'headers' as const },
+    }
+
+    await saveConfig(data, jsonPath)
+    const loaded = await loadConfig(jsonPath)
+
+    expect(loaded.servers).toHaveLength(1)
+    expect(loaded.servers[0]!.name).toBe('prod')
+    expect(loaded.servers[0]!.auth).toEqual({ method: 'bearer', token: 'xyz' })
+    expect(loaded.preferences.defaultResponseTab).toBe('headers')
+  })
+
   test('throws ConfigError on write failure', async () => {
     const badPath = '/nonexistent-dir-12345/config.toml'
 
