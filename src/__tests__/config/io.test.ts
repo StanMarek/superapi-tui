@@ -341,3 +341,87 @@ describe('getJsonConfigPath', () => {
     expect(path).toEndWith('.superapi-tui.json')
   })
 })
+
+describe('loadConfig TOML', () => {
+  test('parses valid TOML config', async () => {
+    const tomlPath = join(tempDir, 'config.toml')
+    const toml = [
+      '[[servers]]',
+      'name = "dev"',
+      'url = "https://dev.example.com"',
+      '',
+      '[servers.auth]',
+      'method = "bearer"',
+      'token = "abc"',
+      '',
+      '[preferences]',
+      'defaultResponseTab = "raw"',
+    ].join('\n')
+    await Bun.write(tomlPath, toml)
+
+    const result = await loadConfig(tomlPath)
+
+    expect(result.servers).toHaveLength(1)
+    expect(result.servers[0]!.name).toBe('dev')
+    expect(result.servers[0]!.url).toBe('https://dev.example.com')
+    expect(result.servers[0]!.auth).toEqual({ method: 'bearer', token: 'abc' })
+    expect(result.preferences.defaultResponseTab).toBe('raw')
+  })
+
+  test('returns defaults for invalid TOML', async () => {
+    const tomlPath = join(tempDir, 'bad.toml')
+    await Bun.write(tomlPath, '[[invalid toml content {{{')
+
+    const result = await loadConfig(tomlPath)
+
+    expect(result).toEqual(DEFAULT_CONFIG)
+    expect(warnSpy).toHaveBeenCalled()
+  })
+
+  test('parses all auth types from TOML', async () => {
+    const tomlPath = join(tempDir, 'auth.toml')
+    const toml = [
+      '[[servers]]',
+      'name = "bearer-api"',
+      'url = "https://bearer.com"',
+      '[servers.auth]',
+      'method = "bearer"',
+      'token = "tok"',
+      '',
+      '[[servers]]',
+      'name = "apikey-api"',
+      'url = "https://apikey.com"',
+      '[servers.auth]',
+      'method = "apiKey"',
+      'key = "secret"',
+      'paramName = "X-Key"',
+      'location = "header"',
+      '',
+      '[[servers]]',
+      'name = "basic-api"',
+      'url = "https://basic.com"',
+      '[servers.auth]',
+      'method = "basic"',
+      'username = "user"',
+      'password = "pass"',
+    ].join('\n')
+    await Bun.write(tomlPath, toml)
+
+    const result = await loadConfig(tomlPath)
+
+    expect(result.servers).toHaveLength(3)
+    expect(result.servers[0]!.auth).toEqual({ method: 'bearer', token: 'tok' })
+    expect(result.servers[1]!.auth).toEqual({
+      method: 'apiKey', key: 'secret', paramName: 'X-Key', location: 'header',
+    })
+    expect(result.servers[2]!.auth).toEqual({
+      method: 'basic', username: 'user', password: 'pass',
+    })
+  })
+
+  test('returns defaults when TOML file does not exist', async () => {
+    const tomlPath = join(tempDir, 'nonexistent.toml')
+    const result = await loadConfig(tomlPath)
+    expect(result).toEqual(DEFAULT_CONFIG)
+  })
+})
