@@ -2,6 +2,7 @@ import { describe, test, expect, mock, afterEach } from 'bun:test'
 import { render } from 'ink-testing-library'
 import { RequestPanel } from '@/components/RequestPanel.js'
 import type { Endpoint, ServerInfo, SchemaInfo, SecuritySchemeInfo } from '@/types/index.js'
+import type { SavedAuth } from '@/config/index.js'
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -751,5 +752,184 @@ describe('RequestPanel - auth toggle', () => {
     const calls2 = onCapture.mock.calls as unknown as [boolean][]
     const lastCallValue2 = calls2[calls2.length - 1][0]
     expect(lastCallValue2).toBe(false)
+  })
+})
+
+describe('RequestPanel - save profile', () => {
+  test('W key enters save-name mode with default name', async () => {
+    const onSave = mock((_name: string, _url: string, _auth?: SavedAuth, _swaggerUrl?: string) => Promise.resolve(true))
+    const { lastFrame, stdin } = render(
+      <RequestPanel
+        endpoint={makeEndpoint()}
+        isFocused={true}
+        servers={defaultServers}
+        securitySchemes={[]}
+        onSaveServerAuth={onSave}
+      />,
+    )
+    await delay(50)
+
+    stdin.write('W')
+    await delay(50)
+
+    expect(lastFrame()).toContain('Profile name:')
+    expect(lastFrame()).toContain('Enter to save')
+    expect(lastFrame()).toContain('Esc to cancel')
+  })
+
+  test('Enter in save-name mode triggers save with entered name', async () => {
+    const onSave = mock((_name: string, _url: string, _auth?: SavedAuth, _swaggerUrl?: string) => Promise.resolve(true))
+    const { lastFrame, stdin } = render(
+      <RequestPanel
+        endpoint={makeEndpoint()}
+        isFocused={true}
+        servers={defaultServers}
+        securitySchemes={[]}
+        onSaveServerAuth={onSave}
+      />,
+    )
+    await delay(50)
+
+    // Enter save mode
+    stdin.write('W')
+    await delay(50)
+
+    // Press Enter to accept default name
+    stdin.write('\r')
+    await delay(100)
+
+    expect(onSave).toHaveBeenCalledTimes(1)
+    const args = onSave.mock.lastCall as unknown as [string, string, SavedAuth | undefined, string | undefined]
+    expect(args[0]).toBe('https://api.example.com') // default name = URL (no description)
+    expect(args[1]).toBe('https://api.example.com') // server URL
+  })
+
+  test('Escape in save-name mode cancels without saving', async () => {
+    const onSave = mock((_name: string, _url: string, _auth?: SavedAuth, _swaggerUrl?: string) => Promise.resolve(true))
+    const { lastFrame, stdin } = render(
+      <RequestPanel
+        endpoint={makeEndpoint()}
+        isFocused={true}
+        servers={defaultServers}
+        securitySchemes={[]}
+        onSaveServerAuth={onSave}
+      />,
+    )
+    await delay(50)
+
+    stdin.write('W')
+    await delay(50)
+    expect(lastFrame()).toContain('Profile name:')
+
+    stdin.write('\x1b')
+    await delay(50)
+
+    expect(onSave).not.toHaveBeenCalled()
+    expect(lastFrame()).not.toContain('Profile name:')
+  })
+
+  test('typing in save-name mode updates the name', async () => {
+    const onSave = mock((_name: string, _url: string, _auth?: SavedAuth, _swaggerUrl?: string) => Promise.resolve(true))
+    const { lastFrame, stdin } = render(
+      <RequestPanel
+        endpoint={makeEndpoint()}
+        isFocused={true}
+        servers={defaultServers}
+        securitySchemes={[]}
+        onSaveServerAuth={onSave}
+      />,
+    )
+    await delay(50)
+
+    stdin.write('W')
+    await delay(50)
+
+    // The buffer starts with a default name. Typing appends to the buffer.
+    stdin.write('X')
+    await delay(50)
+
+    expect(lastFrame()).toContain('X')
+
+    stdin.write('\r')
+    await delay(100)
+
+    const args = onSave.mock.lastCall as unknown as [string, string, SavedAuth | undefined, string | undefined]
+    // Name should be the default name + "X"
+    expect(args[0]).toContain('X')
+  })
+
+  test('save includes specLoadUrl as swaggerEndpointUrl', async () => {
+    const onSave = mock((_name: string, _url: string, _auth?: SavedAuth, _swaggerUrl?: string) => Promise.resolve(true))
+    const { stdin } = render(
+      <RequestPanel
+        endpoint={makeEndpoint()}
+        isFocused={true}
+        servers={defaultServers}
+        securitySchemes={[]}
+        onSaveServerAuth={onSave}
+        specLoadUrl="https://api.example.com/swagger.json"
+      />,
+    )
+    await delay(50)
+
+    stdin.write('W')
+    await delay(50)
+    stdin.write('\r')
+    await delay(100)
+
+    const args = onSave.mock.lastCall as unknown as [string, string, SavedAuth | undefined, string | undefined]
+    expect(args[3]).toBe('https://api.example.com/swagger.json')
+  })
+
+  test('save-name mode activates text capture guard', async () => {
+    const onCapture = mock((_active: boolean) => {})
+    const onSave = mock((_name: string, _url: string, _auth?: SavedAuth, _swaggerUrl?: string) => Promise.resolve(true))
+    const { stdin } = render(
+      <RequestPanel
+        endpoint={makeEndpoint()}
+        isFocused={true}
+        servers={defaultServers}
+        securitySchemes={[]}
+        onTextCaptureChange={onCapture}
+        onSaveServerAuth={onSave}
+      />,
+    )
+    await delay(50)
+
+    stdin.write('W')
+    await delay(50)
+
+    const calls = onCapture.mock.calls as unknown as [boolean][]
+    const lastCallValue = calls[calls.length - 1][0]
+    expect(lastCallValue).toBe(true)
+
+    // Cancel
+    stdin.write('\x1b')
+    await delay(50)
+
+    const calls2 = onCapture.mock.calls as unknown as [boolean][]
+    const lastCallValue2 = calls2[calls2.length - 1][0]
+    expect(lastCallValue2).toBe(false)
+  })
+
+  test('successful save shows confirmation message', async () => {
+    const onSave = mock((_name: string, _url: string, _auth?: SavedAuth, _swaggerUrl?: string) => Promise.resolve(true))
+    const { lastFrame, stdin } = render(
+      <RequestPanel
+        endpoint={makeEndpoint()}
+        isFocused={true}
+        servers={defaultServers}
+        securitySchemes={[]}
+        onSaveServerAuth={onSave}
+      />,
+    )
+    await delay(50)
+
+    stdin.write('W')
+    await delay(50)
+    stdin.write('\r')
+    await delay(100)
+
+    expect(lastFrame()).toContain('Saved to')
   })
 })

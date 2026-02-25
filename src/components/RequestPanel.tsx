@@ -147,6 +147,8 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
   const [editingBody, setEditingBody] = useState(false)
   const [editingAuthField, setEditingAuthField] = useState<AuthFieldKey | null>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [saveNameBuffer, setSaveNameBuffer] = useState('')
   const initialAuthApplied = useRef(false)
 
   // Ref-backed edit buffer: ref is always current, state is debounced for display.
@@ -195,7 +197,7 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
 
   const { cursorIndex, moveUp, moveDown, moveToTop, moveToBottom } = useScrollableList(rows.length)
 
-  const isTextCapturing = editingParam !== null || editingBody || editingAuthField !== null
+  const isTextCapturing = editingParam !== null || editingBody || editingAuthField !== null || savingProfile
 
   useEffect(() => {
     onTextCaptureChange?.(isTextCapturing)
@@ -227,6 +229,45 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
 
   useInput(
     (input, key) => {
+      // Save profile name editing mode
+      if (savingProfile) {
+        if (key.return) {
+          const trimmedName = saveNameBuffer.trim()
+          if (trimmedName.length > 0 && onSaveServerAuth && servers.length > 0) {
+            const serverIdx = state.selectedServerIndex % servers.length
+            const server = servers[serverIdx]
+            if (server) {
+              const serverUrl = resolveServerUrl(server)
+              const savedAuth = credentialsToSavedAuth(state.auth.credentials)
+              onSaveServerAuth(trimmedName, serverUrl, savedAuth ?? undefined, specLoadUrl).then(ok => {
+                if (ok) {
+                  setSaveMessage(`Saved to ${getConfigPath()}`)
+                } else {
+                  setSaveMessage('Failed to save config')
+                }
+                setTimeout(() => setSaveMessage(null), 2000)
+              })
+            }
+          }
+          setSavingProfile(false)
+          setSaveNameBuffer('')
+          return
+        }
+        if (key.escape) {
+          setSavingProfile(false)
+          setSaveNameBuffer('')
+          return
+        }
+        if (key.backspace || key.delete) {
+          setSaveNameBuffer(prev => prev.slice(0, -1))
+          return
+        }
+        if (input && !key.ctrl && !key.meta) {
+          setSaveNameBuffer(prev => prev + input)
+        }
+        return
+      }
+
       // Auth field editing mode
       if (editingAuthField !== null) {
         if (key.return || key.escape) {
@@ -349,16 +390,9 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
           const server = servers[serverIdx]
           if (server) {
             const serverUrl = resolveServerUrl(server)
-            const savedAuth = credentialsToSavedAuth(state.auth.credentials)
-            const serverName = server.description ?? serverUrl
-            onSaveServerAuth(serverName, serverUrl, savedAuth ?? undefined).then(ok => {
-              if (ok) {
-                setSaveMessage(`Saved to ${getConfigPath()}`)
-              } else {
-                setSaveMessage('Failed to save config')
-              }
-              setTimeout(() => setSaveMessage(null), 2000)
-            })
+            const defaultName = server.description ?? serverUrl
+            setSaveNameBuffer(defaultName)
+            setSavingProfile(true)
           }
         }
         return
@@ -443,6 +477,14 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
 
       {saveMessage && (
         <Text color="green">{saveMessage}</Text>
+      )}
+
+      {savingProfile && (
+        <Box marginTop={1}>
+          <Text>Profile name: </Text>
+          <Text color="cyan">{saveNameBuffer}<Text color="yellow">|</Text></Text>
+          <Text dimColor> (Enter to save, Esc to cancel)</Text>
+        </Box>
       )}
 
       {rows.map((row, index) => {
