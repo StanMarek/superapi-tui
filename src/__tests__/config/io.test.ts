@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { mkdtemp, rm } from 'node:fs/promises'
-import { loadConfig, saveConfig } from '@/config/io.js'
+import { loadConfig, saveConfig, getConfigPath, getJsonConfigPath } from '@/config/io.js'
 import { DEFAULT_CONFIG } from '@/config/types.js'
 import { ConfigError } from '@/config/errors.js'
 
@@ -293,37 +293,233 @@ describe('loadConfig', () => {
 })
 
 describe('saveConfig', () => {
-  test('writes config to file', async () => {
+  test('writes TOML config to file', async () => {
+    const tomlPath = join(tempDir, 'config.toml')
     const data = {
       servers: [{ name: 'prod', url: 'https://prod.api.com', auth: { method: 'bearer' as const, token: 'xyz' } }],
       preferences: { defaultResponseTab: 'raw' as const },
     }
 
-    await saveConfig(data, configPath)
+    await saveConfig(data, tomlPath)
 
-    const written = await Bun.file(configPath).text()
+    const written = await Bun.file(tomlPath).text()
+    expect(written).toContain('[[servers]]')
+    expect(written).toContain('name = "prod"')
+    expect(written).toContain('method = "bearer"')
+    expect(written).toContain('token = "xyz"')
+  })
+
+  test('writes TOML with trailing newline', async () => {
+    const tomlPath = join(tempDir, 'config.toml')
+    await saveConfig(DEFAULT_CONFIG, tomlPath)
+
+    const written = await Bun.file(tomlPath).text()
+    expect(written).toEndWith('\n')
+  })
+
+  test('TOML save then load round-trip', async () => {
+    const tomlPath = join(tempDir, 'roundtrip.toml')
+    const data = {
+      servers: [
+        { name: 'prod', url: 'https://prod.api.com', auth: { method: 'bearer' as const, token: 'xyz' } },
+        { name: 'dev', url: 'https://dev.api.com' },
+      ],
+      preferences: { defaultResponseTab: 'headers' as const },
+    }
+
+    await saveConfig(data, tomlPath)
+    const loaded = await loadConfig(tomlPath)
+
+    expect(loaded.servers).toHaveLength(2)
+    expect(loaded.servers[0]!.name).toBe('prod')
+    expect(loaded.servers[0]!.auth).toEqual({ method: 'bearer', token: 'xyz' })
+    expect(loaded.servers[1]!.name).toBe('dev')
+    expect(loaded.servers[1]!.auth).toBeUndefined()
+    expect(loaded.preferences.defaultResponseTab).toBe('headers')
+  })
+
+  test('writes JSON when path ends with .json', async () => {
+    const jsonPath = join(tempDir, 'config.json')
+    const data = {
+      servers: [{ name: 'prod', url: 'https://prod.api.com', auth: { method: 'bearer' as const, token: 'xyz' } }],
+      preferences: { defaultResponseTab: 'raw' as const },
+    }
+
+    await saveConfig(data, jsonPath)
+
+    const written = await Bun.file(jsonPath).text()
     const parsed = JSON.parse(written)
     expect(parsed.servers[0].name).toBe('prod')
     expect(parsed.preferences.defaultResponseTab).toBe('raw')
   })
 
-  test('writes pretty-printed JSON with trailing newline', async () => {
-    await saveConfig(DEFAULT_CONFIG, configPath)
+  test('JSON save then load round-trip via explicit path', async () => {
+    const jsonPath = join(tempDir, 'roundtrip.json')
+    const data = {
+      servers: [
+        { name: 'prod', url: 'https://prod.api.com', auth: { method: 'bearer' as const, token: 'xyz' } },
+      ],
+      preferences: { defaultResponseTab: 'headers' as const },
+    }
 
-    const written = await Bun.file(configPath).text()
-    expect(written).toEndWith('\n')
-    expect(written).toContain('  ')
+    await saveConfig(data, jsonPath)
+    const loaded = await loadConfig(jsonPath)
+
+    expect(loaded.servers).toHaveLength(1)
+    expect(loaded.servers[0]!.name).toBe('prod')
+    expect(loaded.servers[0]!.auth).toEqual({ method: 'bearer', token: 'xyz' })
+    expect(loaded.preferences.defaultResponseTab).toBe('headers')
   })
 
   test('throws ConfigError on write failure', async () => {
-    const badPath = '/nonexistent-dir-12345/config.json'
+    const badPath = '/nonexistent-dir-12345/config.toml'
 
     try {
       await saveConfig(DEFAULT_CONFIG, badPath)
-      expect(true).toBe(false) // should not reach
+      expect(true).toBe(false)
     } catch (err) {
       expect(err).toBeInstanceOf(ConfigError)
       expect((err as ConfigError).message).toContain('Failed to write config file')
     }
+  })
+})
+
+describe('getConfigPath', () => {
+  test('returns TOML path in home directory', () => {
+    const path = getConfigPath()
+    expect(path).toEndWith('.superapi-tui.toml')
+  })
+})
+
+describe('getJsonConfigPath', () => {
+  test('returns JSON path in home directory', () => {
+    const path = getJsonConfigPath()
+    expect(path).toEndWith('.superapi-tui.json')
+  })
+})
+
+describe('loadConfig TOML', () => {
+  test('parses valid TOML config', async () => {
+    const tomlPath = join(tempDir, 'config.toml')
+    const toml = [
+      '[[servers]]',
+      'name = "dev"',
+      'url = "https://dev.example.com"',
+      '',
+      '[servers.auth]',
+      'method = "bearer"',
+      'token = "abc"',
+      '',
+      '[preferences]',
+      'defaultResponseTab = "raw"',
+    ].join('\n')
+    await Bun.write(tomlPath, toml)
+
+    const result = await loadConfig(tomlPath)
+
+    expect(result.servers).toHaveLength(1)
+    expect(result.servers[0]!.name).toBe('dev')
+    expect(result.servers[0]!.url).toBe('https://dev.example.com')
+    expect(result.servers[0]!.auth).toEqual({ method: 'bearer', token: 'abc' })
+    expect(result.preferences.defaultResponseTab).toBe('raw')
+  })
+
+  test('returns defaults for invalid TOML', async () => {
+    const tomlPath = join(tempDir, 'bad.toml')
+    await Bun.write(tomlPath, '[[invalid toml content {{{')
+
+    const result = await loadConfig(tomlPath)
+
+    expect(result).toEqual(DEFAULT_CONFIG)
+    expect(warnSpy).toHaveBeenCalled()
+  })
+
+  test('parses all auth types from TOML', async () => {
+    const tomlPath = join(tempDir, 'auth.toml')
+    const toml = [
+      '[[servers]]',
+      'name = "bearer-api"',
+      'url = "https://bearer.com"',
+      '[servers.auth]',
+      'method = "bearer"',
+      'token = "tok"',
+      '',
+      '[[servers]]',
+      'name = "apikey-api"',
+      'url = "https://apikey.com"',
+      '[servers.auth]',
+      'method = "apiKey"',
+      'key = "secret"',
+      'paramName = "X-Key"',
+      'location = "header"',
+      '',
+      '[[servers]]',
+      'name = "basic-api"',
+      'url = "https://basic.com"',
+      '[servers.auth]',
+      'method = "basic"',
+      'username = "user"',
+      'password = "pass"',
+    ].join('\n')
+    await Bun.write(tomlPath, toml)
+
+    const result = await loadConfig(tomlPath)
+
+    expect(result.servers).toHaveLength(3)
+    expect(result.servers[0]!.auth).toEqual({ method: 'bearer', token: 'tok' })
+    expect(result.servers[1]!.auth).toEqual({
+      method: 'apiKey', key: 'secret', paramName: 'X-Key', location: 'header',
+    })
+    expect(result.servers[2]!.auth).toEqual({
+      method: 'basic', username: 'user', password: 'pass',
+    })
+  })
+
+  test('returns defaults when TOML file does not exist', async () => {
+    const tomlPath = join(tempDir, 'nonexistent.toml')
+    const result = await loadConfig(tomlPath)
+    expect(result).toEqual(DEFAULT_CONFIG)
+  })
+})
+
+describe('loadConfig fallback', () => {
+  test('falls back to JSON when TOML absent', async () => {
+    const tomlPath = join(tempDir, 'config.toml')
+    const jsonPath = join(tempDir, 'config.json')
+    await Bun.write(jsonPath, JSON.stringify({
+      servers: [{ name: 'json-server', url: 'https://json.com' }],
+    }))
+
+    const result = await loadConfig(tomlPath, jsonPath)
+
+    expect(result.servers).toHaveLength(1)
+    expect(result.servers[0]!.name).toBe('json-server')
+  })
+
+  test('TOML takes precedence when both exist', async () => {
+    const tomlPath = join(tempDir, 'config.toml')
+    const jsonPath = join(tempDir, 'config.json')
+    await Bun.write(tomlPath, [
+      '[[servers]]',
+      'name = "toml-server"',
+      'url = "https://toml.com"',
+    ].join('\n'))
+    await Bun.write(jsonPath, JSON.stringify({
+      servers: [{ name: 'json-server', url: 'https://json.com' }],
+    }))
+
+    const result = await loadConfig(tomlPath, jsonPath)
+
+    expect(result.servers).toHaveLength(1)
+    expect(result.servers[0]!.name).toBe('toml-server')
+  })
+
+  test('returns defaults when neither TOML nor JSON exist', async () => {
+    const tomlPath = join(tempDir, 'missing.toml')
+    const jsonPath = join(tempDir, 'missing.json')
+
+    const result = await loadConfig(tomlPath, jsonPath)
+
+    expect(result).toEqual(DEFAULT_CONFIG)
   })
 })

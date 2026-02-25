@@ -1,37 +1,98 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { chmod } from 'node:fs/promises'
+import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
 import type { ConfigData, SavedServer, SavedAuth, Preferences } from './types.js'
 import { DEFAULT_CONFIG, DEFAULT_PREFERENCES } from './types.js'
 import { ConfigError } from './errors.js'
 
 export function getConfigPath(): string {
+  return join(homedir(), '.superapi-tui.toml')
+}
+
+export function getJsonConfigPath(): string {
   return join(homedir(), '.superapi-tui.json')
 }
 
-export async function loadConfig(configPath?: string): Promise<ConfigData> {
-  const path = configPath ?? getConfigPath()
-
+async function tryReadFile(path: string): Promise<string | null> {
   try {
     const file = Bun.file(path)
     const exists = await file.exists()
-    if (!exists) {
-      return DEFAULT_CONFIG
-    }
+    if (!exists) return null
+    return await file.text()
+  } catch {
+    return null
+  }
+}
 
-    const text = await file.text()
-    let raw: unknown
-    try {
-      raw = JSON.parse(text)
-    } catch {
-      console.warn(`superapi-tui: invalid JSON in config file ${path}, using defaults`)
-      return DEFAULT_CONFIG
-    }
+function parseTomlText(text: string, path: string): ConfigData {
+  let raw: unknown
+  try {
+    raw = parseToml(text)
+  } catch {
+    console.warn(`superapi-tui: invalid TOML in config file ${path}, using defaults`)
+    return DEFAULT_CONFIG
+  }
+  return parseConfigData(raw)
+}
 
-    return parseConfigData(raw)
+function parseJsonText(text: string, path: string): ConfigData {
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    console.warn(`superapi-tui: invalid JSON in config file ${path}, using defaults`)
+    return DEFAULT_CONFIG
+  }
+  return parseConfigData(raw)
+}
+
+export async function loadConfig(
+  configPath?: string,
+  jsonFallbackPath?: string,
+): Promise<ConfigData> {
+  // Explicit single-path mode (backward compat — tests pass explicit paths)
+  if (configPath !== undefined && jsonFallbackPath === undefined) {
+    return loadSingleConfig(configPath)
+  }
+
+  // Dual-path mode: TOML first, JSON fallback
+  const tomlPath = configPath ?? getConfigPath()
+  const jsonPath = jsonFallbackPath ?? getJsonConfigPath()
+  return loadWithFallback(tomlPath, jsonPath)
+}
+
+async function loadSingleConfig(path: string): Promise<ConfigData> {
+  try {
+    const text = await tryReadFile(path)
+    if (text === null) return DEFAULT_CONFIG
+
+    return path.endsWith('.toml')
+      ? parseTomlText(text, path)
+      : parseJsonText(text, path)
   } catch (err) {
     if (err instanceof ConfigError) throw err
     console.warn(`superapi-tui: failed to read config file ${path}, using defaults`)
+    return DEFAULT_CONFIG
+  }
+}
+
+async function loadWithFallback(tomlPath: string, jsonPath: string): Promise<ConfigData> {
+  try {
+    const tomlText = await tryReadFile(tomlPath)
+    if (tomlText !== null) {
+      return parseTomlText(tomlText, tomlPath)
+    }
+
+    const jsonText = await tryReadFile(jsonPath)
+    if (jsonText !== null) {
+      return parseJsonText(jsonText, jsonPath)
+    }
+
+    return DEFAULT_CONFIG
+  } catch (err) {
+    if (err instanceof ConfigError) throw err
+    console.warn('superapi-tui: failed to read config, using defaults')
     return DEFAULT_CONFIG
   }
 }
@@ -40,10 +101,25 @@ export async function saveConfig(data: ConfigData, configPath?: string): Promise
   const path = configPath ?? getConfigPath()
 
   try {
-    await Bun.write(path, JSON.stringify(data, null, 2) + '\n')
+    const plain = toPlainObject(data)
+    const content = path.endsWith('.json')
+      ? JSON.stringify(plain, null, 2) + '\n'
+      : stringifyToml(plain) + '\n'
+    await Bun.write(path, content)
     await chmod(path, 0o600)
   } catch (err) {
     throw new ConfigError(`Failed to write config file: ${path}`, err)
+  }
+}
+
+function toPlainObject(data: ConfigData): Record<string, unknown> {
+  return {
+    servers: data.servers.map(s => {
+      const server: Record<string, unknown> = { name: s.name, url: s.url }
+      if (s.auth !== undefined) server.auth = { ...s.auth }
+      return server
+    }),
+    preferences: { ...data.preferences },
   }
 }
 
