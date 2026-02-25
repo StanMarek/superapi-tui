@@ -115,7 +115,9 @@ export async function saveConfig(data: ConfigData, configPath?: string): Promise
 function toPlainObject(data: ConfigData): Record<string, unknown> {
   return {
     servers: data.servers.map(s => {
-      const server: Record<string, unknown> = { name: s.name, url: s.url }
+      const server: Record<string, unknown> = { name: s.name }
+      if (s.swaggerEndpointUrl !== undefined) server.swaggerEndpointUrl = s.swaggerEndpointUrl
+      if (s.url !== undefined) server.url = s.url
       if (s.auth !== undefined) server.auth = { ...s.auth }
       return server
     }),
@@ -165,8 +167,16 @@ function parseSavedServer(raw: unknown): SavedServer | null {
     return null
   }
 
-  if (typeof obj['url'] !== 'string' || obj['url'].length === 0) {
-    console.warn('superapi-tui: skipping server entry missing url')
+  const swaggerEndpointUrl = typeof obj['swaggerEndpointUrl'] === 'string' && obj['swaggerEndpointUrl'].length > 0
+    ? obj['swaggerEndpointUrl']
+    : undefined
+
+  const url = typeof obj['url'] === 'string' && obj['url'].length > 0
+    ? obj['url']
+    : undefined
+
+  if (swaggerEndpointUrl === undefined && url === undefined) {
+    console.warn('superapi-tui: skipping server entry missing both swaggerEndpointUrl and url')
     return null
   }
 
@@ -174,7 +184,8 @@ function parseSavedServer(raw: unknown): SavedServer | null {
 
   return {
     name: obj['name'],
-    url: obj['url'],
+    ...(swaggerEndpointUrl !== undefined ? { swaggerEndpointUrl } : {}),
+    ...(url !== undefined ? { url } : {}),
     ...(auth !== undefined ? { auth } : {}),
   }
 }

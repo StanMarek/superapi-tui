@@ -5,7 +5,8 @@ export type SavedAuth = Exclude<AuthCredentials, { method: 'none' }>
 
 export interface SavedServer {
   readonly name: string
-  readonly url: string
+  readonly swaggerEndpointUrl?: string
+  readonly url?: string
   readonly auth?: SavedAuth
 }
 

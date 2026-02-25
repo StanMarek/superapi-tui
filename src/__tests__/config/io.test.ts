@@ -290,6 +290,72 @@ describe('loadConfig', () => {
     expect(result.servers).toEqual([])
     expect(result.preferences.defaultResponseTab).toBe('pretty')
   })
+
+  test('parses server with swaggerEndpointUrl', async () => {
+    const data = {
+      servers: [{ name: 'api', swaggerEndpointUrl: 'https://api.com/docs', url: 'https://api.com' }],
+    }
+    await Bun.write(configPath, JSON.stringify(data))
+
+    const result = await loadConfig(configPath)
+
+    expect(result.servers).toHaveLength(1)
+    expect(result.servers[0]!.swaggerEndpointUrl).toBe('https://api.com/docs')
+    expect(result.servers[0]!.url).toBe('https://api.com')
+  })
+
+  test('parses server with only swaggerEndpointUrl (no url)', async () => {
+    const data = {
+      servers: [{ name: 'api', swaggerEndpointUrl: 'https://api.com/swagger.json' }],
+    }
+    await Bun.write(configPath, JSON.stringify(data))
+
+    const result = await loadConfig(configPath)
+
+    expect(result.servers).toHaveLength(1)
+    expect(result.servers[0]!.swaggerEndpointUrl).toBe('https://api.com/swagger.json')
+    expect(result.servers[0]!.url).toBeUndefined()
+  })
+
+  test('parses server with only url (no swaggerEndpointUrl) — backward compat', async () => {
+    const data = {
+      servers: [{ name: 'api', url: 'https://api.com/v3/api-docs' }],
+    }
+    await Bun.write(configPath, JSON.stringify(data))
+
+    const result = await loadConfig(configPath)
+
+    expect(result.servers).toHaveLength(1)
+    expect(result.servers[0]!.swaggerEndpointUrl).toBeUndefined()
+    expect(result.servers[0]!.url).toBe('https://api.com/v3/api-docs')
+  })
+
+  test('skips server missing both swaggerEndpointUrl and url', async () => {
+    const data = {
+      servers: [
+        { name: 'no-urls' },
+        { name: 'valid', swaggerEndpointUrl: 'https://valid.com/docs' },
+      ],
+    }
+    await Bun.write(configPath, JSON.stringify(data))
+
+    const result = await loadConfig(configPath)
+
+    expect(result.servers).toHaveLength(1)
+    expect(result.servers[0]!.name).toBe('valid')
+    expect(warnSpy).toHaveBeenCalled()
+  })
+
+  test('skips server with empty swaggerEndpointUrl and empty url', async () => {
+    const data = {
+      servers: [{ name: 'empty', swaggerEndpointUrl: '', url: '' }],
+    }
+    await Bun.write(configPath, JSON.stringify(data))
+
+    const result = await loadConfig(configPath)
+
+    expect(result.servers).toHaveLength(0)
+  })
 })
 
 describe('saveConfig', () => {
@@ -369,6 +435,35 @@ describe('saveConfig', () => {
     expect(loaded.servers[0]!.name).toBe('prod')
     expect(loaded.servers[0]!.auth).toEqual({ method: 'bearer', token: 'xyz' })
     expect(loaded.preferences.defaultResponseTab).toBe('headers')
+  })
+
+  test('TOML round-trip with swaggerEndpointUrl', async () => {
+    const tomlPath = join(tempDir, 'swagger.toml')
+    const data = {
+      servers: [
+        {
+          name: 'full',
+          swaggerEndpointUrl: 'https://api.com/swagger.json',
+          url: 'https://api.com',
+          auth: { method: 'bearer' as const, token: 'tok' },
+        },
+        {
+          name: 'swagger-only',
+          swaggerEndpointUrl: 'https://other.com/docs',
+        },
+      ],
+      preferences: { defaultResponseTab: 'pretty' as const },
+    }
+
+    await saveConfig(data, tomlPath)
+    const loaded = await loadConfig(tomlPath)
+
+    expect(loaded.servers).toHaveLength(2)
+    expect(loaded.servers[0]!.swaggerEndpointUrl).toBe('https://api.com/swagger.json')
+    expect(loaded.servers[0]!.url).toBe('https://api.com')
+    expect(loaded.servers[0]!.auth).toEqual({ method: 'bearer', token: 'tok' })
+    expect(loaded.servers[1]!.swaggerEndpointUrl).toBe('https://other.com/docs')
+    expect(loaded.servers[1]!.url).toBeUndefined()
   })
 
   test('throws ConfigError on write failure', async () => {
