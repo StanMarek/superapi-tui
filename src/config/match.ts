@@ -11,7 +11,7 @@ export function matchServerAuth(
   const normalized = normalizeUrl(specServerUrl)
 
   for (const server of savedServers) {
-    if (normalizeUrl(server.url) === normalized) {
+    if (server.url !== undefined && normalizeUrl(server.url) === normalized) {
       return server.auth ?? null
     }
   }

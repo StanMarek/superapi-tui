@@ -108,4 +108,44 @@ describe('matchServerAuth', () => {
 
     expect(result).toEqual({ method: 'apiKey', key: 'secret', paramName: 'X-API-Key', location: 'header' })
   })
+
+  test('skips servers without url field', () => {
+    const servers: readonly SavedServer[] = [
+      { name: 'swagger-only', swaggerEndpointUrl: 'https://api.example.com/docs' },
+    ]
+
+    const result = matchServerAuth(servers, 'https://api.example.com')
+
+    expect(result).toBeNull()
+  })
+
+  test('matches server with url when swaggerEndpointUrl also present', () => {
+    const servers: readonly SavedServer[] = [
+      {
+        name: 'full',
+        swaggerEndpointUrl: 'https://api.example.com/docs',
+        url: 'https://api.example.com',
+        auth: { method: 'bearer', token: 'abc' },
+      },
+    ]
+
+    const result = matchServerAuth(servers, 'https://api.example.com')
+
+    expect(result).toEqual({ method: 'bearer', token: 'abc' })
+  })
+
+  test('does not match swaggerEndpointUrl — only matches url', () => {
+    const servers: readonly SavedServer[] = [
+      {
+        name: 'full',
+        swaggerEndpointUrl: 'https://api.example.com/docs',
+        url: 'https://api.example.com',
+        auth: { method: 'bearer', token: 'abc' },
+      },
+    ]
+
+    const result = matchServerAuth(servers, 'https://api.example.com/docs')
+
+    expect(result).toBeNull()
+  })
 })
