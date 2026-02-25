@@ -1,11 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Box, Text } from 'ink'
 import { Select, Spinner, TextInput } from '@inkjs/ui'
-import { loadConfig } from '@/config/index.js'
-import type { SavedServer } from '@/config/index.js'
+import { loadConfig as defaultLoadConfig } from '@/config/index.js'
+import type { SavedServer, ConfigData } from '@/config/index.js'
+
+export interface LauncherDeps {
+  readonly loadConfig: () => Promise<ConfigData>
+}
 
 interface Props {
   readonly onSelect: (input: string) => void
+  readonly deps?: LauncherDeps
 }
 
 type Phase =
@@ -15,7 +20,8 @@ type Phase =
 
 const MANUAL_ENTRY_VALUE = '__manual__'
 
-export function Launcher({ onSelect }: Props) {
+export function Launcher({ onSelect, deps }: Props) {
+  const resolvedLoadConfig = deps?.loadConfig ?? defaultLoadConfig
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' })
 
   useEffect(() => {
@@ -23,7 +29,7 @@ export function Launcher({ onSelect }: Props) {
 
     async function init() {
       try {
-        const config = await loadConfig()
+        const config = await resolvedLoadConfig()
         if (cancelled) return
 
         if (config.servers.length === 0) {

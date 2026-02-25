@@ -1,14 +1,22 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Box, Text, useApp } from 'ink'
 import { Spinner } from '@inkjs/ui'
-import { loadSpec } from '@/loader/index.js'
-import { parseSpec } from '@/parser/index.js'
+import { loadSpec as defaultLoadSpec } from '@/loader/index.js'
+import { parseSpec as defaultParseSpec } from '@/parser/index.js'
 import { Launcher } from './Launcher.js'
+import type { LauncherDeps } from './Launcher.js'
 import App from '@/App.js'
-import type { ParsedSpec } from '@/types/index.js'
+import type { ParsedSpec, LoadResult } from '@/types/index.js'
+
+export interface SpecLoaderDeps {
+  readonly loadSpec: (input: string) => Promise<LoadResult>
+  readonly parseSpec: (content: string) => Promise<ParsedSpec>
+}
 
 interface Props {
   readonly input: string | undefined
+  readonly deps?: SpecLoaderDeps
+  readonly launcherDeps?: LauncherDeps
 }
 
 type State =
@@ -17,7 +25,9 @@ type State =
   | { readonly phase: 'loaded'; readonly spec: ParsedSpec }
   | { readonly phase: 'error'; readonly message: string }
 
-export function SpecLoader({ input }: Props) {
+export function SpecLoader({ input, deps, launcherDeps }: Props) {
+  const resolvedLoadSpec = deps?.loadSpec ?? defaultLoadSpec
+  const resolvedParseSpec = deps?.parseSpec ?? defaultParseSpec
   const { exit } = useApp()
   const [state, setState] = useState<State>(
     input
@@ -36,11 +46,11 @@ export function SpecLoader({ input }: Props) {
 
     async function load() {
       try {
-        const result = await loadSpec(target)
+        const result = await resolvedLoadSpec(target)
         if (cancelled) return
 
         setState({ phase: 'loading', message: 'Parsing spec...', specInput: target })
-        const spec = await parseSpec(result.content)
+        const spec = await resolvedParseSpec(result.content)
         if (cancelled) return
 
         setState({ phase: 'loaded', spec })
@@ -76,7 +86,7 @@ export function SpecLoader({ input }: Props) {
   }, [])
 
   if (state.phase === 'launcher') {
-    return <Launcher onSelect={handleLauncherSelect} />
+    return <Launcher onSelect={handleLauncherSelect} deps={launcherDeps} />
   }
 
   if (state.phase === 'loading') {
