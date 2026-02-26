@@ -134,12 +134,15 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
           return
         }
         if (key.return) {
+          // Stay in typing mode if filter matches nothing
+          if (rows.length === 0) return
           const currentRow = rows[cursorIndex]
           if (currentRow?.kind === 'endpoint') {
             onSelectEndpoint(currentRow.endpoint)
           }
+          // Transition to applied — keep textCapture active so Esc
+          // is consumed here, not leaked to useNavigation
           setFilterMode('applied')
-          onTextCaptureChange?.(false)
           return
         }
         if (key.backspace || key.delete) {
@@ -159,13 +162,16 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
           setFilterMode('off')
           setFilterText('')
           setCursorIndex(0)
+          onTextCaptureChange?.(false)
           return
         }
         if (input === '/') {
+          // textCapture already active from typing→applied, no change needed
           setFilterMode('typing')
-          onTextCaptureChange?.(true)
           return
         }
+        // Applied mode keeps textCapture active, so only
+        // navigation keys (j/k/g/G/Enter) fall through below
       }
 
       if (input === '/' && filterMode === 'off') {

@@ -5,6 +5,10 @@ import type { Endpoint, TagGroup } from '@/types/index.js'
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockCallArg = (fn: ReturnType<typeof mock>, callIndex: number, argIndex: number) =>
+  (fn.mock.calls as any)[callIndex][argIndex]
+
 const petEndpoints: readonly Endpoint[] = [
   {
     id: 'get-/pets',
@@ -211,8 +215,7 @@ describe('EndpointList', () => {
       stdin.write('\r')
       await delay(50)
       expect(onSelect).toHaveBeenCalledTimes(1)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((onSelect.mock.calls as any)[0][0]).toEqual(petEndpoints[0])
+      expect(mockCallArg(onSelect, 0, 0)).toEqual(petEndpoints[0])
     })
 
     it('expands with l and collapses with h', async () => {
@@ -345,7 +348,7 @@ describe('EndpointList', () => {
       expect(frame).not.toContain('\u25B6')
     })
 
-    it('selects endpoint on Enter in filter mode and exits typing', async () => {
+    it('selects endpoint on Enter in filter mode and keeps text capture for applied mode', async () => {
       const onSelect = mock(() => {})
       const onTextCapture = mock(() => {})
       const { stdin } = render(
@@ -363,10 +366,10 @@ describe('EndpointList', () => {
       stdin.write('\r')
       await delay(50)
       expect(onSelect).toHaveBeenCalledTimes(1)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((onSelect.mock.calls as any)[0][0].path).toBe('/store/inventory')
+      expect(mockCallArg(onSelect, 0, 0).path).toBe('/store/inventory')
+      // textCapture stays true through applied mode — only Esc releases it
       const calls = onTextCapture.mock.calls as unknown as [boolean][]
-      expect(calls[calls.length - 1]![0]).toBe(false)
+      expect(calls[calls.length - 1]![0]).toBe(true)
     })
 
     it('shows filter hint after Enter exits typing mode', async () => {
@@ -408,7 +411,7 @@ describe('EndpointList', () => {
       expect(frame).not.toContain('/store/inventory')
     })
 
-    it('notifies text capture on applied filter so Esc is consumed locally', async () => {
+    it('Esc from applied filter restores normal view and releases text capture', async () => {
       const onSelect = mock(() => {})
       const onTextCapture = mock(() => {})
       const { lastFrame, stdin } = render(
@@ -426,14 +429,17 @@ describe('EndpointList', () => {
       await delay(50)
       stdin.write('\r')
       await delay(50)
-      // After Enter, text capture was turned off for typing...
-      // But now we're in applied mode — Esc should clear filter
+      // textCapture still active in applied mode
+      const callsBefore = onTextCapture.mock.calls as unknown as [boolean][]
+      expect(callsBefore[callsBefore.length - 1]![0]).toBe(true)
+      // Esc clears filter AND releases text capture
       stdin.write('\x1b')
       await delay(50)
       const frame = lastFrame()!
-      // Should be back to normal view
       expect(frame).toContain('\u25B6')
       expect(frame).not.toContain('filter:')
+      const callsAfter = onTextCapture.mock.calls as unknown as [boolean][]
+      expect(callsAfter[callsAfter.length - 1]![0]).toBe(false)
     })
 
     it('allows navigation and selection in applied filter mode', async () => {
@@ -453,10 +459,8 @@ describe('EndpointList', () => {
       stdin.write('\r')
       await delay(50)
       expect(onSelect).toHaveBeenCalledTimes(2)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((onSelect.mock.calls as any)[1][0].path).toBe('/pets')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((onSelect.mock.calls as any)[1][0].method).toBe('post')
+      expect(mockCallArg(onSelect, 1, 0).path).toBe('/pets')
+      expect(mockCallArg(onSelect, 1, 0).method).toBe('post')
     })
 
     it('re-entering filter from applied mode preserves filter text', async () => {
