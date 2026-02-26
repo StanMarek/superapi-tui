@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Box, Text, useInput } from 'ink'
 import { Spinner } from '@inkjs/ui'
 import type { Endpoint, ServerInfo, SecuritySchemeInfo, AuthFieldKey, AuthCredentials, ResponseTab } from '@/types/index.js'
@@ -7,6 +7,7 @@ import { getConfigPath } from '@/config/index.js'
 import { METHOD_COLORS } from '@/utils/http-method.js'
 import { useRequestState } from '@/hooks/useRequestState.js'
 import { useScrollableList } from '@/hooks/useScrollableList.js'
+import { useLineEditor } from '@/hooks/useLineEditor.js'
 import { resolveServerUrl } from '@/http/index.js'
 
 interface Props {
@@ -148,45 +149,10 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
   const [editingAuthField, setEditingAuthField] = useState<AuthFieldKey | null>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [savingProfile, setSavingProfile] = useState(false)
-  const [saveNameBuffer, setSaveNameBuffer] = useState('')
   const initialAuthApplied = useRef(false)
 
-  // Ref-backed edit buffer: ref is always current, state is debounced for display.
-  // Prevents render storm when terminals send pasted text character-by-character.
-  const editBufferRef = useRef('')
-  const [editBuffer, setEditBuffer] = useState('')
-  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const scheduleFlush = useCallback(() => {
-    if (flushTimerRef.current === null) {
-      flushTimerRef.current = setTimeout(() => {
-        flushTimerRef.current = null
-        setEditBuffer(editBufferRef.current)
-      }, 16)
-    }
-  }, [])
-
-  const flushEditBuffer = useCallback(() => {
-    if (flushTimerRef.current !== null) {
-      clearTimeout(flushTimerRef.current)
-      flushTimerRef.current = null
-    }
-    setEditBuffer(editBufferRef.current)
-  }, [])
-
-  const initEditBuffer = useCallback((value: string) => {
-    editBufferRef.current = value
-    setEditBuffer(value)
-  }, [])
-
-  // Cleanup flush timer on unmount
-  useEffect(() => {
-    return () => {
-      if (flushTimerRef.current !== null) {
-        clearTimeout(flushTimerRef.current)
-      }
-    }
-  }, [])
+  const editor = useLineEditor()
+  const bodyEditor = useLineEditor({ multiline: true })
 
   const selectedOption = state.auth.availableOptions[state.auth.selectedOptionIndex % state.auth.availableOptions.length]
 
@@ -235,8 +201,7 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
     setEditingParam(null)
     setEditingBody(false)
     setEditingAuthField(null)
-    initEditBuffer('')
-  }, [endpoint, initEditBuffer])
+  }, [endpoint])
 
   // Initial auth restoration from config
   useEffect(() => {
@@ -258,8 +223,9 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
     (input, key) => {
       // Save profile name editing mode
       if (savingProfile) {
-        if (key.return) {
-          const trimmedName = saveNameBuffer.trim()
+        const action = editor.handleInput(input, key)
+        if (action === 'commit') {
+          const trimmedName = editor.getText().trim()
           if (trimmedName.length > 0 && onSaveServerAuth && mergedServers.length > 0) {
             const serverIdx = state.selectedServerIndex % mergedServers.length
             const server = mergedServers[serverIdx]
@@ -282,92 +248,60 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
             }
           }
           setSavingProfile(false)
-          setSaveNameBuffer('')
           return
         }
-        if (key.escape) {
+        if (action === 'cancel') {
           setSavingProfile(false)
-          setSaveNameBuffer('')
           return
-        }
-        if (key.backspace || key.delete) {
-          setSaveNameBuffer(prev => prev.slice(0, -1))
-          return
-        }
-        if (input && !key.ctrl && !key.meta) {
-          setSaveNameBuffer(prev => prev + input)
         }
         return
       }
 
       // Auth field editing mode
       if (editingAuthField !== null) {
-        if (key.return || key.escape) {
-          flushEditBuffer()
-          if (key.return) {
-            state.auth.setAuthField(editingAuthField, editBufferRef.current)
-          }
+        const action = editor.handleInput(input, key)
+        if (action === 'commit') {
+          state.auth.setAuthField(editingAuthField, editor.getText())
           setEditingAuthField(null)
-          initEditBuffer('')
           return
         }
-        if (key.backspace || key.delete) {
-          editBufferRef.current = editBufferRef.current.slice(0, -1)
-          scheduleFlush()
+        if (action === 'cancel') {
+          setEditingAuthField(null)
           return
-        }
-        if (input && !key.ctrl && !key.meta) {
-          editBufferRef.current += input
-          scheduleFlush()
         }
         return
       }
 
       // Param editing mode
       if (editingParam !== null) {
-        if (key.return || key.escape) {
-          flushEditBuffer()
-          if (key.return) {
-            state.setParamValue(editingParam, editBufferRef.current)
-          }
+        const action = editor.handleInput(input, key)
+        if (action === 'commit') {
+          state.setParamValue(editingParam, editor.getText())
           setEditingParam(null)
-          initEditBuffer('')
           return
         }
-        if (key.backspace || key.delete) {
-          editBufferRef.current = editBufferRef.current.slice(0, -1)
-          scheduleFlush()
+        if (action === 'cancel') {
+          setEditingParam(null)
           return
-        }
-        if (input && !key.ctrl && !key.meta) {
-          editBufferRef.current += input
-          scheduleFlush()
         }
         return
       }
 
       // Body editing mode
       if (editingBody) {
-        if (key.escape) {
-          flushEditBuffer()
-          state.setBodyText(editBufferRef.current)
-          state.validateBody(editBufferRef.current)
+        const action = bodyEditor.handleInput(input, key)
+        if (action === 'commit') {
+          state.setBodyText(bodyEditor.getText())
+          state.validateBody(bodyEditor.getText())
           setEditingBody(false)
           return
         }
-        if (key.return) {
-          editBufferRef.current += '\n'
-          scheduleFlush()
+        // 'cancel' from multiline also means save (body has no discard)
+        if (action === 'cancel') {
+          state.setBodyText(bodyEditor.getText())
+          state.validateBody(bodyEditor.getText())
+          setEditingBody(false)
           return
-        }
-        if (key.backspace || key.delete) {
-          editBufferRef.current = editBufferRef.current.slice(0, -1)
-          scheduleFlush()
-          return
-        }
-        if (input && !key.ctrl && !key.meta) {
-          editBufferRef.current += input
-          scheduleFlush()
         }
         return
       }
@@ -423,7 +357,7 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
           if (server) {
             const serverUrl = resolveServerUrl(server)
             const defaultName = server.description ?? serverUrl
-            setSaveNameBuffer(defaultName)
+            editor.init(defaultName)
             setSavingProfile(true)
           }
         }
@@ -444,12 +378,12 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
         if (row?.type === 'auth-field') {
           const currentValue = getAuthFieldValue(row.fieldKey)
           setEditingAuthField(row.fieldKey)
-          initEditBuffer(currentValue)
+          editor.init(currentValue)
           return
         }
         if (row?.type === 'param') {
           setEditingParam(row.paramKey)
-          initEditBuffer(state.paramValues.get(row.paramKey) ?? '')
+          editor.init(state.paramValues.get(row.paramKey) ?? '')
           return
         }
         if (row?.type === 'send') {
@@ -463,7 +397,7 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
         const row = rows[cursorIndex]
         if (row?.type === 'body-editor') {
           setEditingBody(true)
-          initEditBuffer(state.bodyText)
+          bodyEditor.init(state.bodyText)
           return
         }
       }
@@ -514,7 +448,11 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
       {savingProfile && (
         <Box marginTop={1}>
           <Text>Profile name: </Text>
-          <Text color="cyan">{saveNameBuffer}<Text color="yellow">|</Text></Text>
+          <Text color="cyan">
+            {editor.text.slice(0, editor.cursorPos)}
+            <Text color="yellow">|</Text>
+            {editor.text.slice(editor.cursorPos)}
+          </Text>
           <Text dimColor> (Enter to save, Esc to cancel)</Text>
         </Box>
       )}
@@ -564,14 +502,18 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
         if (row.type === 'auth-field') {
           const isEditing = editingAuthField === row.fieldKey
           const isMasked = row.fieldKey === 'password'
-          const rawValue = isEditing ? editBuffer : getAuthFieldValue(row.fieldKey)
+          const rawValue = isEditing ? editor.text : getAuthFieldValue(row.fieldKey)
           const displayValue = isMasked && !isEditing && rawValue ? '*'.repeat(rawValue.length) : rawValue
 
           return (
             <Box key={`auth-${row.fieldKey}`}>
               <Text inverse={isSelected} dimColor={!isFocused}>
                 {row.label}: {isEditing ? (
-                  <Text color="cyan">{editBuffer}<Text color="yellow">|</Text></Text>
+                  <Text color="cyan">
+                    {editor.text.slice(0, editor.cursorPos)}
+                    <Text color="yellow">|</Text>
+                    {editor.text.slice(editor.cursorPos)}
+                  </Text>
                 ) : (
                   <Text>{displayValue || '<empty>'}</Text>
                 )}
@@ -582,12 +524,16 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
 
         if (row.type === 'param') {
           const isEditing = editingParam === row.paramKey
-          const value = isEditing ? editBuffer : (state.paramValues.get(row.paramKey) ?? '')
+          const value = isEditing ? editor.text : (state.paramValues.get(row.paramKey) ?? '')
           return (
             <Box key={row.paramKey}>
               <Text inverse={isSelected} dimColor={!isFocused}>
                 {row.label}: {isEditing ? (
-                  <Text color="cyan">{value}<Text color="yellow">|</Text></Text>
+                  <Text color="cyan">
+                    {editor.text.slice(0, editor.cursorPos)}
+                    <Text color="yellow">|</Text>
+                    {editor.text.slice(editor.cursorPos)}
+                  </Text>
                 ) : (
                   <Text>{value || '<empty>'}</Text>
                 )}
@@ -600,11 +546,28 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
           return (
             <Box key="body" flexDirection="column" marginTop={1}>
               <Text inverse={isSelected} dimColor={!isFocused}>
-                Body {editingBody ? '(editing - Escape to save)' : '(e to edit)'}
+                Body {editingBody
+                  ? (bodyEditor.mode === 'normal' ? '(NORMAL - i to insert, Enter to save)' : '(editing - Escape for normal mode)')
+                  : '(e to edit)'}
               </Text>
               {editingBody ? (
                 <Box paddingLeft={2} flexDirection="column">
-                  <Text color="cyan">{editBuffer}<Text color="yellow">|</Text></Text>
+                  {bodyEditor.mode === 'normal' ? (
+                    <>
+                      <Text color="cyan">
+                        {bodyEditor.text.slice(0, bodyEditor.cursorPos)}
+                        <Text inverse>{bodyEditor.text[bodyEditor.cursorPos] ?? ' '}</Text>
+                        {bodyEditor.text.slice(bodyEditor.cursorPos + 1)}
+                      </Text>
+                      <Text dimColor>-- NORMAL -- (i to insert, Enter to save)</Text>
+                    </>
+                  ) : (
+                    <Text color="cyan">
+                      {bodyEditor.text.slice(0, bodyEditor.cursorPos)}
+                      <Text color="yellow">|</Text>
+                      {bodyEditor.text.slice(bodyEditor.cursorPos)}
+                    </Text>
+                  )}
                 </Box>
               ) : (
                 <Box paddingLeft={2} flexDirection="column">

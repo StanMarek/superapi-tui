@@ -1087,3 +1087,229 @@ describe('RequestPanel - saved request base URL injection', () => {
     expect(lastFrame()).toContain('https://api.example.com')
   })
 })
+
+describe('RequestPanel — cursor-aware editing', () => {
+  test('cursor movement + insert at position in param editing', async () => {
+    const endpoint = makeEndpoint({
+      parameters: [
+        { name: 'petId', location: 'path', required: true, deprecated: false },
+      ],
+    })
+    const { lastFrame, stdin } = render(
+      <RequestPanel endpoint={endpoint} isFocused={true} servers={defaultServers} securitySchemes={[]} />,
+    )
+    await delay(50)
+
+    // Navigate to param row (server → auth-toggle → param)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+
+    // Enter edit mode
+    stdin.write('\r')
+    await delay(50)
+
+    // Type "abc"
+    stdin.write('a')
+    await delay(50)
+    stdin.write('b')
+    await delay(50)
+    stdin.write('c')
+    await delay(50)
+
+    // Press left arrow twice (cursor between 'a' and 'b')
+    stdin.write('\x1b[D')
+    await delay(50)
+    stdin.write('\x1b[D')
+    await delay(50)
+
+    // Type 'X' (inserts at position 1)
+    stdin.write('X')
+    await delay(50)
+
+    // Assert "aXbc" is in the output (cursor '|' sits between X and b during editing)
+    expect(lastFrame()).toContain('aX')
+    expect(lastFrame()).toContain('bc')
+
+    // Press Enter to confirm
+    stdin.write('\r')
+    await delay(50)
+
+    // Assert "aXbc" persists after commit (no cursor indicator in non-editing display)
+    expect(lastFrame()).toContain('aXbc')
+  })
+
+  test('backspace in middle of param text', async () => {
+    const endpoint = makeEndpoint({
+      parameters: [
+        { name: 'petId', location: 'path', required: true, deprecated: false },
+      ],
+    })
+    const { lastFrame, stdin } = render(
+      <RequestPanel endpoint={endpoint} isFocused={true} servers={defaultServers} securitySchemes={[]} />,
+    )
+    await delay(50)
+
+    // Navigate to param row (server → auth-toggle → param)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+
+    // Enter edit mode
+    stdin.write('\r')
+    await delay(50)
+
+    // Type "abcd"
+    stdin.write('a')
+    await delay(50)
+    stdin.write('b')
+    await delay(50)
+    stdin.write('c')
+    await delay(50)
+    stdin.write('d')
+    await delay(50)
+
+    // Press left arrow twice (cursor at position 2, between 'b' and 'c')
+    stdin.write('\x1b[D')
+    await delay(50)
+    stdin.write('\x1b[D')
+    await delay(50)
+
+    // Press backspace (should remove 'b')
+    stdin.write('\x7f')
+    await delay(50)
+
+    // Assert "acd" in output (cursor '|' sits between 'a' and 'c' during editing)
+    // The rendered text is "a|cd" so check parts around cursor
+    expect(lastFrame()).toContain('cd')
+    expect(lastFrame()).not.toContain('abcd')
+    // Confirm via Enter and check committed value without cursor indicator
+    stdin.write('\r')
+    await delay(50)
+    expect(lastFrame()).toContain('acd')
+  })
+
+  test('body editor normal mode', async () => {
+    const endpoint = makeEndpoint({
+      method: 'post',
+      path: '/pets',
+      requestBody: {
+        required: true,
+        content: [{
+          mediaType: 'application/json',
+          schema: makeSchema({
+            properties: new Map<string, SchemaInfo>([
+              ['name', makeSchema({ type: 'string', displayType: 'string' })],
+            ]),
+          }),
+        }],
+      },
+    })
+    const { lastFrame, stdin } = render(
+      <RequestPanel endpoint={endpoint} isFocused={true} servers={defaultServers} securitySchemes={[]} />,
+    )
+    await delay(50)
+
+    // Navigate to body row: server(0) → auth-toggle(1) → body-editor(2)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+
+    // Press 'e' to enter body editing mode
+    stdin.write('e')
+    await delay(50)
+
+    // Assert editing hint visible (insert mode)
+    expect(lastFrame()).toContain('Escape for normal mode')
+
+    // Press Escape to enter normal mode (multiline body editor)
+    stdin.write('\x1b')
+    await delay(50)
+
+    // Assert "NORMAL" is visible
+    expect(lastFrame()).toContain('NORMAL')
+
+    // Press Enter in normal mode (commits/saves and exits)
+    stdin.write('\r')
+    await delay(50)
+
+    // Assert "e to edit" visible (back to non-editing state)
+    expect(lastFrame()).toContain('e to edit')
+  })
+
+  test('paste regression — long JWT token in auth field', async () => {
+    const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U'
+
+    const { lastFrame, stdin } = render(
+      <RequestPanel endpoint={makeEndpoint()} isFocused={true} servers={defaultServers} securitySchemes={[]} />,
+    )
+    await delay(50)
+
+    // Open auth, navigate to token field, enter edit mode
+    stdin.write('a')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('\r')
+    await delay(50)
+
+    // Paste full JWT as single write
+    stdin.write(jwt)
+    await delay(100)
+
+    // Assert token prefix visible
+    expect(lastFrame()).toContain('eyJhbGci')
+
+    // Press Enter to commit
+    stdin.write('\r')
+    await delay(50)
+
+    // Assert token prefix persists after commit
+    expect(lastFrame()).toContain('eyJhbGci')
+  })
+
+  test('paste regression — char-by-char JWT token in auth field', async () => {
+    const jwt = 'eyJhbGciOiJIUzI1Ni.test'
+
+    const { lastFrame, stdin } = render(
+      <RequestPanel endpoint={makeEndpoint()} isFocused={true} servers={defaultServers} securitySchemes={[]} />,
+    )
+    await delay(50)
+
+    // Open auth, navigate to token field, enter edit mode
+    stdin.write('a')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('j')
+    await delay(50)
+    stdin.write('\r')
+    await delay(50)
+
+    // Write each char individually with no delay between (worst-case terminal paste)
+    for (const ch of jwt) {
+      stdin.write(ch)
+    }
+    // Wait for debounce to flush
+    await delay(100)
+
+    // Assert token prefix visible
+    expect(lastFrame()).toContain('eyJhbGci')
+
+    // Press Enter to commit
+    stdin.write('\r')
+    await delay(50)
+
+    // Assert token prefix persists after commit
+    expect(lastFrame()).toContain('eyJhbGci')
+  })
+})
