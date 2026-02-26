@@ -1,5 +1,5 @@
 import { Box } from 'ink'
-import { useNavigation, useConfig } from '@/hooks/index.js'
+import { useNavigation, useConfig, useTerminalHeight } from '@/hooks/index.js'
 import { EndpointList } from '@/components/EndpointList.js'
 import { EndpointDetail } from '@/components/EndpointDetail.js'
 import { RequestPanel } from '@/components/RequestPanel.js'
@@ -15,6 +15,7 @@ interface Props {
 export default function App({ spec, specLoadUrl, savedRequestBaseUrl }: Props) {
   const { focusedPanel, selectedEndpoint, selectEndpoint, setTextCapture, fullscreenPanel, showHelp } = useNavigation()
   const { saveServerAuth, findAuthForServer, preferences, isLoading: configLoading } = useConfig()
+  const terminalHeight = useTerminalHeight()
 
   return (
     <Box flexDirection="column" width="100%" height="100%">
@@ -37,6 +38,7 @@ export default function App({ spec, specLoadUrl, savedRequestBaseUrl }: Props) {
               isFocused={focusedPanel === 'endpoints' && !showHelp}
               onSelectEndpoint={selectEndpoint}
               onTextCaptureChange={setTextCapture}
+              terminalHeight={terminalHeight}
             />
           </Box>
         )}
@@ -52,6 +54,7 @@ export default function App({ spec, specLoadUrl, savedRequestBaseUrl }: Props) {
               isFocused={focusedPanel === 'detail' && !showHelp}
               componentSchemas={spec.componentSchemas}
               onTextCaptureChange={setTextCapture}
+              terminalHeight={terminalHeight}
             />
           </Box>
         )}
@@ -74,6 +77,7 @@ export default function App({ spec, specLoadUrl, savedRequestBaseUrl }: Props) {
               defaultResponseTab={preferences.defaultResponseTab}
               specLoadUrl={specLoadUrl}
               savedRequestBaseUrl={savedRequestBaseUrl}
+              terminalHeight={terminalHeight}
             />
           </Box>
         )}
