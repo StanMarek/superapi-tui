@@ -8,6 +8,8 @@ import { METHOD_COLORS } from '@/utils/http-method.js'
 import { useRequestState } from '@/hooks/useRequestState.js'
 import { useScrollableList } from '@/hooks/useScrollableList.js'
 import { useLineEditor } from '@/hooks/useLineEditor.js'
+import { useViewport } from '@/hooks/useViewport.js'
+import { ScrollIndicator } from './ScrollIndicator.js'
 import { resolveServerUrl } from '@/http/index.js'
 
 interface Props {
@@ -22,7 +24,10 @@ interface Props {
   readonly defaultResponseTab?: ResponseTab
   readonly specLoadUrl?: string
   readonly savedRequestBaseUrl?: string
+  readonly terminalHeight?: number
 }
+
+const REQUEST_PANEL_RESERVED = 7
 
 type Row =
   | { readonly type: 'server'; readonly label: string }
@@ -142,7 +147,7 @@ function credentialsToSavedAuth(creds: AuthCredentials): SavedAuth | null {
   }
 }
 
-export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, onTextCaptureChange, onSaveServerAuth, findAuthForServer, configLoaded, defaultResponseTab, specLoadUrl, savedRequestBaseUrl }: Props) {
+export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, onTextCaptureChange, onSaveServerAuth, findAuthForServer, configLoaded, defaultResponseTab, specLoadUrl, savedRequestBaseUrl, terminalHeight }: Props) {
   const state = useRequestState(endpoint, securitySchemes, defaultResponseTab)
   const [editingParam, setEditingParam] = useState<string | null>(null)
   const [editingBody, setEditingBody] = useState(false)
@@ -189,6 +194,14 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
   )
 
   const { cursorIndex, moveUp, moveDown, moveToTop, moveToBottom } = useScrollableList(rows.length)
+
+  const hasBudget = terminalHeight !== undefined
+  const viewport = useViewport({
+    rowCount: rows.length,
+    cursorIndex,
+    reservedLines: REQUEST_PANEL_RESERVED,
+    terminalHeight,
+  })
 
   const isTextCapturing = editingParam !== null || editingBody || editingAuthField !== null || savingProfile
 
@@ -457,8 +470,10 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
         </Box>
       )}
 
-      {rows.map((row, index) => {
-        const isSelected = index === cursorIndex && isFocused
+      <ScrollIndicator direction="up" visible={hasBudget && viewport.hasOverflowAbove} />
+      {(hasBudget ? rows.slice(viewport.scrollOffset, viewport.scrollOffset + viewport.visibleCount) : rows).map((row, localIndex) => {
+        const globalIndex = hasBudget ? viewport.scrollOffset + localIndex : localIndex
+        const isSelected = globalIndex === cursorIndex && isFocused
 
         if (row.type === 'server') {
           return (
@@ -637,24 +652,33 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
 
           const { response: res } = state
 
+          // Dynamic cap: remaining lines in visible viewport after this row's position
+          const dynamicCap = hasBudget
+            ? Math.max(3, viewport.visibleCount - localIndex - 2) // -2 for marginTop + status line
+            : PRETTY_LINE_CAP
+
           if (state.activeTab === 'pretty') {
             const { lines, isJson } = formatPrettyResponse(res.body)
+            const cappedLines = lines.slice(0, dynamicCap)
+            const wasTruncated = cappedLines.length < lines.length
             return (
               <Box key="response" marginTop={1} flexDirection="column">
                 <Text bold>
                   {res.status} {res.statusText} ({res.durationMs}ms)
                 </Text>
                 {!isJson && <Text dimColor>(Response is not JSON)</Text>}
-                {lines.map((line, i) => (
+                {cappedLines.map((line, i) => (
                   <Text key={i} color={isJson ? colorForJsonLine(line) : undefined}>{line}</Text>
                 ))}
+                {wasTruncated && <Text dimColor>... ({lines.length - cappedLines.length} more lines)</Text>}
               </Box>
             )
           }
 
           if (state.activeTab === 'raw') {
-            const raw = res.body.length > RAW_CHAR_CAP
-              ? res.body.slice(0, RAW_CHAR_CAP) + `\n... (${res.body.length - RAW_CHAR_CAP} more chars)`
+            const rawCap = hasBudget ? dynamicCap * 80 : RAW_CHAR_CAP
+            const raw = res.body.length > rawCap
+              ? res.body.slice(0, rawCap) + `\n... (${res.body.length - rawCap} more chars)`
               : res.body
             return (
               <Box key="response" marginTop={1} flexDirection="column">
@@ -667,17 +691,22 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
           }
 
           if (state.activeTab === 'headers') {
+            const allHeaders = [...res.headers.entries()]
+            const cappedHeaders = hasBudget ? allHeaders.slice(0, dynamicCap) : allHeaders
             return (
               <Box key="response" marginTop={1} flexDirection="column">
                 <Text bold>
                   {res.status} {res.statusText} ({res.durationMs}ms)
                 </Text>
-                {[...res.headers.entries()].map(([key, value]) => (
+                {cappedHeaders.map(([key, value]) => (
                   <Box key={key}>
                     <Text color="cyan">{key}</Text>
                     <Text>: {value}</Text>
                   </Box>
                 ))}
+                {cappedHeaders.length < allHeaders.length && (
+                  <Text dimColor>... ({allHeaders.length - cappedHeaders.length} more headers)</Text>
+                )}
               </Box>
             )
           }
@@ -685,6 +714,7 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
 
         return null
       })}
+      <ScrollIndicator direction="down" visible={hasBudget && viewport.hasOverflowBelow} />
     </Box>
   )
 }
