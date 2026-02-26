@@ -408,6 +408,34 @@ describe('EndpointList', () => {
       expect(frame).not.toContain('/store/inventory')
     })
 
+    it('notifies text capture on applied filter so Esc is consumed locally', async () => {
+      const onSelect = mock(() => {})
+      const onTextCapture = mock(() => {})
+      const { lastFrame, stdin } = render(
+        <EndpointList
+          tagGroups={tagGroups}
+          isFocused={true}
+          onSelectEndpoint={onSelect}
+          onTextCaptureChange={onTextCapture}
+        />,
+      )
+      // Enter filter, type, Enter to apply
+      stdin.write('/')
+      await delay(50)
+      stdin.write('pet')
+      await delay(50)
+      stdin.write('\r')
+      await delay(50)
+      // After Enter, text capture was turned off for typing...
+      // But now we're in applied mode — Esc should clear filter
+      stdin.write('\x1b')
+      await delay(50)
+      const frame = lastFrame()!
+      // Should be back to normal view
+      expect(frame).toContain('\u25B6')
+      expect(frame).not.toContain('filter:')
+    })
+
     it('allows navigation and selection in applied filter mode', async () => {
       const onSelect = mock(() => {})
       const { stdin } = render(
