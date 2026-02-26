@@ -165,4 +165,82 @@ describe('App', () => {
       expect(frame).not.toContain('Endpoint Detail')
     })
   })
+
+  describe('filter selection', () => {
+    it('selecting from filtered list updates endpoint detail panel', async () => {
+      const specWithMultiple: ParsedSpec = {
+        info: { title: 'Test API', version: '1.0.0', specVersion: '3.0.0' },
+        servers: [],
+        tagGroups: [
+          {
+            name: 'default',
+            endpoints: [
+              {
+                id: 'get-/health',
+                method: 'get',
+                path: '/health',
+                summary: 'Health check',
+                tags: ['default'],
+                deprecated: false,
+                parameters: [],
+                responses: [],
+              },
+              {
+                id: 'get-/users',
+                method: 'get',
+                path: '/users',
+                summary: 'List users',
+                tags: ['default'],
+                deprecated: false,
+                parameters: [],
+                responses: [],
+              },
+            ],
+          },
+        ],
+        endpoints: [
+          {
+            id: 'get-/health',
+            method: 'get',
+            path: '/health',
+            summary: 'Health check',
+            tags: ['default'],
+            deprecated: false,
+            parameters: [],
+            responses: [],
+          },
+          {
+            id: 'get-/users',
+            method: 'get',
+            path: '/users',
+            summary: 'List users',
+            tags: ['default'],
+            deprecated: false,
+            parameters: [],
+            responses: [],
+          },
+        ],
+        tags: ['default'],
+        securitySchemes: [],
+        globalSecurity: [],
+        componentSchemas: new Map(),
+      }
+
+      const { lastFrame, stdin } = render(<App spec={specWithMultiple} />)
+      // Enter filter mode
+      stdin.write('/')
+      await delay(50)
+      // Type "users"
+      stdin.write('users')
+      await delay(50)
+      // Press Enter to select
+      stdin.write('\r')
+      await delay(50)
+      const frame = lastFrame()!
+      // Detail panel should update — show endpoint info
+      // The endpoint path should appear in detail
+      expect(frame).toContain('/users')
+      expect(frame).toContain('GET')
+    })
+  })
 })
