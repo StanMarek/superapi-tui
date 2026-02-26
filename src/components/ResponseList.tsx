@@ -5,6 +5,7 @@ import type { ResponseInfo, SchemaInfo } from '@/types/index.js'
 interface Props {
   readonly responses: readonly ResponseInfo[]
   readonly onNavigateRef: (schema: SchemaInfo, label: string) => void
+  readonly maxLines?: number
 }
 
 function statusColor(code: string): string | undefined {
@@ -15,14 +16,59 @@ function statusColor(code: string): string | undefined {
   return undefined
 }
 
-export function ResponseList({ responses, onNavigateRef }: Props) {
+function estimateResponseLines(response: ResponseInfo): number {
+  let lines = 1 // status line
+  if (response.content.length > 0) {
+    for (const media of response.content) {
+      lines += 1 // media type line
+      if (media.schema) {
+        if (media.schema.refName) lines += 1
+        // Schema fields
+        if (media.schema.properties) {
+          lines += media.schema.properties.size
+        } else {
+          lines += 1 // primitive type display
+        }
+      }
+    }
+  } else {
+    lines += 1 // "(no content)"
+  }
+  if (response.headers.length > 0) {
+    lines += 1 + response.headers.length // header label + each header
+  }
+  lines += 1 // marginBottom
+  return lines
+}
+
+export function ResponseList({ responses, onNavigateRef, maxLines }: Props) {
   if (responses.length === 0) {
     return <Text dimColor>No responses</Text>
   }
 
+  let responsesToRender = responses
+  let truncated = false
+
+  if (maxLines !== undefined) {
+    let linesUsed = 0
+    let count = 0
+    for (const response of responses) {
+      const cost = estimateResponseLines(response)
+      if (linesUsed + cost > maxLines && count > 0) {
+        truncated = true
+        break
+      }
+      linesUsed += cost
+      count++
+    }
+    responsesToRender = responses.slice(0, count)
+  }
+
+  const remaining = responses.length - responsesToRender.length
+
   return (
     <Box flexDirection="column">
-      {responses.map(response => (
+      {responsesToRender.map(response => (
         <Box key={response.statusCode} flexDirection="column" marginBottom={1}>
           <Text>
             <Text bold color={statusColor(response.statusCode)}>
@@ -69,6 +115,9 @@ export function ResponseList({ responses, onNavigateRef }: Props) {
           )}
         </Box>
       ))}
+      {truncated && remaining > 0 && (
+        <Text dimColor>... {remaining} more responses</Text>
+      )}
     </Box>
   )
 }
