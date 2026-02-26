@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Box, Text, useInput } from 'ink'
 import type { SchemaInfo, SchemaConstraints } from '@/types/index.js'
+import { useViewport } from '@/hooks/useViewport.js'
+import { ScrollIndicator } from './ScrollIndicator.js'
 
 export interface SchemaFieldRow {
   readonly name: string
@@ -16,6 +18,7 @@ interface Props {
   readonly cursorIndex: number
   readonly onNavigateRef: (schema: SchemaInfo, label: string) => void
   readonly isFocused?: boolean
+  readonly maxVisibleRows?: number
 }
 
 const MAX_FLATTEN_DEPTH = 20
@@ -91,7 +94,7 @@ function safeStringify(value: unknown): string {
   }
 }
 
-export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = false }: Props) {
+export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = false, maxVisibleRows }: Props) {
   const [expandedRows, setExpandedRows] = useState<ReadonlySet<number>>(new Set())
   const [internalCursor, setInternalCursor] = useState(0)
 
@@ -100,6 +103,18 @@ export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = fal
   // Self-managed mode: SchemaView handles its own cursor when focused but no external cursor
   const selfManaged = isFocused && cursorIndex < 0
   const activeCursor = selfManaged ? internalCursor : cursorIndex
+  const shouldScroll = selfManaged && maxVisibleRows !== undefined
+
+  // useViewport must be called unconditionally (hooks rule)
+  // When not scrolling, pass rowCount=0 so the hook returns a no-op state
+  const viewport = useViewport({
+    rowCount: shouldScroll ? rows.length : 0,
+    cursorIndex: shouldScroll ? Math.max(0, activeCursor) : 0,
+    reservedLines: 0,
+    terminalHeight: shouldScroll ? maxVisibleRows : undefined,
+  })
+
+  const isViewportActive = shouldScroll && viewport.visibleCount < rows.length
 
   // Reset state when schema changes
   useEffect(() => {
@@ -157,6 +172,11 @@ export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = fal
     { isActive: isFocused && (selfManaged || activeCursor >= 0) },
   )
 
+  // Compute visible rows
+  const visibleRows = isViewportActive
+    ? rows.slice(viewport.scrollOffset, viewport.scrollOffset + viewport.visibleCount)
+    : rows
+
   // Primitive / non-object top-level
   if (!schema.properties && !schema.allOf && !schema.oneOf && !schema.anyOf) {
     return (
@@ -175,15 +195,17 @@ export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = fal
 
   return (
     <Box flexDirection="column">
-      {rows.map((row, index) => {
-        const isSelected = index === activeCursor && isFocused
+      <ScrollIndicator direction="up" visible={isViewportActive && viewport.hasOverflowAbove} />
+      {visibleRows.map((row, localIndex) => {
+        const globalIndex = isViewportActive ? viewport.scrollOffset + localIndex : localIndex
+        const isSelected = globalIndex === activeCursor && isFocused
         const indent = '  '.repeat(row.depth)
-        const isExpanded = expandedRows.has(index)
+        const isExpanded = expandedRows.has(globalIndex)
         const fieldSchema = row.schema
 
         if (row.isCompositionLabel) {
           return (
-            <Text key={`comp-${index}`} inverse={isSelected}>
+            <Text key={`comp-${globalIndex}`} inverse={isSelected}>
               {indent}
               <Text dimColor>{row.compositionType}</Text>
             </Text>
@@ -196,7 +218,7 @@ export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = fal
           : fieldSchema.displayType
 
         return (
-          <Box key={`field-${index}`} flexDirection="column">
+          <Box key={`field-${globalIndex}`} flexDirection="column">
             <Text inverse={isSelected}>
               {indent}
               <Text bold={row.required}>{row.name}</Text>
@@ -234,6 +256,7 @@ export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = fal
           </Box>
         )
       })}
+      <ScrollIndicator direction="down" visible={isViewportActive && viewport.hasOverflowBelow} />
     </Box>
   )
 }

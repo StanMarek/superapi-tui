@@ -4,6 +4,7 @@ import type { Endpoint, SchemaInfo } from '@/types/index.js'
 import { METHOD_COLORS } from '@/utils/http-method.js'
 import { useSchemaNavigation } from '@/hooks/useSchemaNavigation.js'
 import { useScrollableList } from '@/hooks/useScrollableList.js'
+import { useTerminalHeight } from '@/hooks/useTerminalHeight.js'
 import { ParameterList } from './ParameterList.js'
 import { SchemaView } from './SchemaView.js'
 import { ResponseList } from './ResponseList.js'
@@ -13,6 +14,7 @@ interface Props {
   readonly isFocused: boolean
   readonly componentSchemas: ReadonlyMap<string, SchemaInfo>
   readonly onTextCaptureChange?: (active: boolean) => void
+  readonly terminalHeight?: number
 }
 
 type SectionId = 'parameters' | 'requestBody' | 'responses'
@@ -36,7 +38,13 @@ function buildSections(endpoint: Endpoint): readonly Section[] {
   return sections
 }
 
-export function EndpointDetail({ endpoint, isFocused, componentSchemas, onTextCaptureChange }: Props) {
+// Reserved lines: border(2) + padding(2) + title(1) + margin(1) + method(1) = 7
+const SECTION_VIEW_RESERVED = 7
+// Schema view: border(2) + padding(2) + title(1) + margin(1) + breadcrumbs(1) + hint(1) + margin(1) = 9
+const SCHEMA_VIEW_RESERVED = 9
+
+export function EndpointDetail({ endpoint, isFocused, componentSchemas, onTextCaptureChange, terminalHeight: terminalHeightProp }: Props) {
+  const terminalHeight = useTerminalHeight(terminalHeightProp)
   const schemaNav = useSchemaNavigation()
   const sections = useMemo(() => (endpoint ? buildSections(endpoint) : []), [endpoint])
 
@@ -162,6 +170,21 @@ export function EndpointDetail({ endpoint, isFocused, componentSchemas, onTextCa
     )
   }
 
+  // Compute height budgets for sub-components
+  const hasBudget = terminalHeightProp !== undefined
+  const schemaPanelHeight = Math.max(1, terminalHeight - SCHEMA_VIEW_RESERVED)
+  const sectionPanelHeight = Math.max(1, terminalHeight - SECTION_VIEW_RESERVED)
+
+  // Count lines used by section headers (each header takes 2 lines: marginTop + text)
+  const headerLineCount = rows.filter(r => r.type === 'sectionHeader').length * 2
+  // Count expanded content sections
+  const expandedContentCount = rows.filter(r => r.type === 'content').length
+  // Budget for content = panel height - header lines, divided among expanded sections
+  // Math.max(0, ...) on numerator prevents negative division when terminal is tiny
+  const contentBudget = hasBudget && expandedContentCount > 0
+    ? Math.max(1, Math.floor(Math.max(0, sectionPanelHeight - headerLineCount) / expandedContentCount))
+    : 0
+
   // Schema drill-down view
   if (schemaNav.currentView === 'schema' && schemaNav.currentSchema) {
     return (
@@ -178,6 +201,7 @@ export function EndpointDetail({ endpoint, isFocused, componentSchemas, onTextCa
             cursorIndex={-1}
             onNavigateRef={handleNavigateRef}
             isFocused={isFocused}
+            maxVisibleRows={hasBudget ? schemaPanelHeight : undefined}
           />
         </Box>
       </Box>
@@ -209,10 +233,11 @@ export function EndpointDetail({ endpoint, isFocused, componentSchemas, onTextCa
         }
 
         // Content row
+        const maxLinesForContent = contentBudget > 0 ? contentBudget : undefined
         return (
           <Box key={`content-${row.sectionId}`} flexDirection="column" paddingLeft={2}>
             {row.sectionId === 'parameters' && (
-              <ParameterList parameters={endpoint.parameters} />
+              <ParameterList parameters={endpoint.parameters} maxLines={maxLinesForContent} />
             )}
             {row.sectionId === 'requestBody' && endpoint.requestBody && (
               <Box flexDirection="column">
@@ -242,6 +267,7 @@ export function EndpointDetail({ endpoint, isFocused, componentSchemas, onTextCa
               <ResponseList
                 responses={endpoint.responses}
                 onNavigateRef={handleNavigateRef}
+                maxLines={maxLinesForContent}
               />
             )}
           </Box>
