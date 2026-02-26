@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Box, Text, useInput } from 'ink'
 import type { SchemaInfo, SchemaConstraints } from '@/types/index.js'
+import { ScrollIndicator } from './ScrollIndicator.js'
 
 export interface SchemaFieldRow {
   readonly name: string
@@ -16,6 +17,7 @@ interface Props {
   readonly cursorIndex: number
   readonly onNavigateRef: (schema: SchemaInfo, label: string) => void
   readonly isFocused?: boolean
+  readonly maxVisibleRows?: number
 }
 
 const MAX_FLATTEN_DEPTH = 20
@@ -91,9 +93,10 @@ function safeStringify(value: unknown): string {
   }
 }
 
-export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = false }: Props) {
+export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = false, maxVisibleRows }: Props) {
   const [expandedRows, setExpandedRows] = useState<ReadonlySet<number>>(new Set())
   const [internalCursor, setInternalCursor] = useState(0)
+  const scrollOffsetRef = useRef(0)
 
   const rows = flattenSchema(schema)
 
@@ -105,6 +108,7 @@ export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = fal
   useEffect(() => {
     setExpandedRows(new Set())
     setInternalCursor(0)
+    scrollOffsetRef.current = 0
   }, [schema])
 
   const toggleExpand = (index: number) => {
@@ -157,6 +161,48 @@ export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = fal
     { isActive: isFocused && (selfManaged || activeCursor >= 0) },
   )
 
+  // Viewport computation for self-managed mode with maxVisibleRows
+  const useViewportScrolling = selfManaged && maxVisibleRows !== undefined && rows.length > maxVisibleRows
+  let scrollOffset = scrollOffsetRef.current
+  let visibleCount = rows.length
+  let hasOverflowAbove = false
+  let hasOverflowBelow = false
+
+  if (useViewportScrolling) {
+    const rawAvailable = Math.max(1, maxVisibleRows)
+
+    // Keep cursor in range
+    if (activeCursor < scrollOffset) {
+      scrollOffset = activeCursor
+    } else if (activeCursor >= scrollOffset + rawAvailable) {
+      scrollOffset = activeCursor - rawAvailable + 1
+    }
+    scrollOffset = Math.max(0, Math.min(scrollOffset, rows.length - rawAvailable))
+
+    const tmpAbove = scrollOffset > 0
+    const tmpBelow = scrollOffset + rawAvailable < rows.length
+    const indicatorLines = (tmpAbove ? 1 : 0) + (tmpBelow ? 1 : 0)
+    const contentHeight = Math.max(1, rawAvailable - indicatorLines)
+
+    if (activeCursor < scrollOffset) {
+      scrollOffset = activeCursor
+    } else if (activeCursor >= scrollOffset + contentHeight) {
+      scrollOffset = activeCursor - contentHeight + 1
+    }
+    scrollOffset = Math.max(0, Math.min(scrollOffset, rows.length - contentHeight))
+
+    hasOverflowAbove = scrollOffset > 0
+    hasOverflowBelow = scrollOffset + contentHeight < rows.length
+    visibleCount = contentHeight
+    scrollOffsetRef.current = scrollOffset
+  } else {
+    scrollOffsetRef.current = 0
+  }
+
+  const visibleRows = useViewportScrolling
+    ? rows.slice(scrollOffset, scrollOffset + visibleCount)
+    : rows
+
   // Primitive / non-object top-level
   if (!schema.properties && !schema.allOf && !schema.oneOf && !schema.anyOf) {
     return (
@@ -175,15 +221,17 @@ export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = fal
 
   return (
     <Box flexDirection="column">
-      {rows.map((row, index) => {
-        const isSelected = index === activeCursor && isFocused
+      <ScrollIndicator direction="up" visible={hasOverflowAbove} />
+      {visibleRows.map((row, localIndex) => {
+        const globalIndex = useViewportScrolling ? scrollOffset + localIndex : localIndex
+        const isSelected = globalIndex === activeCursor && isFocused
         const indent = '  '.repeat(row.depth)
-        const isExpanded = expandedRows.has(index)
+        const isExpanded = expandedRows.has(globalIndex)
         const fieldSchema = row.schema
 
         if (row.isCompositionLabel) {
           return (
-            <Text key={`comp-${index}`} inverse={isSelected}>
+            <Text key={`comp-${globalIndex}`} inverse={isSelected}>
               {indent}
               <Text dimColor>{row.compositionType}</Text>
             </Text>
@@ -196,7 +244,7 @@ export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = fal
           : fieldSchema.displayType
 
         return (
-          <Box key={`field-${index}`} flexDirection="column">
+          <Box key={`field-${globalIndex}`} flexDirection="column">
             <Text inverse={isSelected}>
               {indent}
               <Text bold={row.required}>{row.name}</Text>
@@ -234,6 +282,7 @@ export function SchemaView({ schema, cursorIndex, onNavigateRef, isFocused = fal
           </Box>
         )
       })}
+      <ScrollIndicator direction="down" visible={hasOverflowBelow} />
     </Box>
   )
 }
