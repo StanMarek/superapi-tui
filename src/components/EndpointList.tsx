@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect } from 'react'
 import { Box, Text, useInput } from 'ink'
 import type { Endpoint, TagGroup } from '@/types/index.js'
 import { METHOD_COLORS } from '@/utils/http-method.js'
+import { useViewport } from '@/hooks/useViewport.js'
+import { ScrollIndicator } from './ScrollIndicator.js'
 
 type ListRow =
   | { readonly kind: 'tag'; readonly tag: string; readonly count: number }
@@ -12,6 +14,7 @@ interface Props {
   readonly isFocused: boolean
   readonly onSelectEndpoint: (endpoint: Endpoint) => void
   readonly onTextCaptureChange?: (active: boolean) => void
+  readonly terminalHeight?: number
 }
 
 function buildRows(
@@ -56,7 +59,7 @@ function getTagAtCursor(
   return row?.tag ?? null
 }
 
-export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCaptureChange }: Props) {
+export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCaptureChange, terminalHeight }: Props) {
   const [cursorIndex, setCursorIndex] = useState(0)
   const [collapsedTags, setCollapsedTags] = useState<ReadonlySet<string>>(
     () => new Set(tagGroups.map(g => g.name)),
@@ -78,6 +81,14 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
   }, [tagGroups, collapsedTags, isFiltering, filterText])
 
   const clampCursor = (index: number) => Math.max(0, Math.min(index, rows.length - 1))
+
+  const reservedLines = 6 + (isFiltering ? 1 : 0)
+  const viewport = useViewport({
+    rowCount: rows.length,
+    cursorIndex,
+    reservedLines,
+    terminalHeight,
+  })
 
   const toggleCollapse = (tag: string) => {
     setCollapsedTags(prev => {
@@ -216,8 +227,10 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
         </Box>
       )}
       <Box flexDirection="column" marginTop={isFiltering ? 0 : 1}>
-        {rows.map((row, index) => {
-          const isSelected = index === cursorIndex && isFocused
+        <ScrollIndicator direction="up" visible={viewport.hasOverflowAbove} />
+        {rows.slice(viewport.scrollOffset, viewport.scrollOffset + viewport.visibleCount).map((row, localIndex) => {
+          const globalIndex = viewport.scrollOffset + localIndex
+          const isSelected = globalIndex === cursorIndex && isFocused
           if (row.kind === 'tag') {
             const indicator = collapsedTags.has(row.tag) ? '\u25B6' : '\u25BC'
             return (
@@ -241,6 +254,7 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
             </Box>
           )
         })}
+        <ScrollIndicator direction="down" visible={viewport.hasOverflowBelow} />
       </Box>
     </Box>
   )
