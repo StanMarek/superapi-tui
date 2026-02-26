@@ -172,6 +172,24 @@ describe('useLineEditor — normal mode', () => {
     expect(lastFrame()).toContain('action:none')
   })
 
+  test('Escape clamps cursor from EOL to last char in normal mode', async () => {
+    const { lastFrame, stdin } = render(
+      <EditorHarness multiline initialText="hello" />,
+    )
+    await delay(50)
+    // In insert mode, cursor is at 5 (after last char)
+    expect(lastFrame()).toContain('cursor:5')
+    stdin.write('\x1b') // Escape → normal mode
+    await delay(50)
+    // Normal mode cursor must sit ON a character → clamped to 4
+    expect(lastFrame()).toContain('cursor:4')
+    expect(lastFrame()).toContain('mode:normal')
+    // x should now delete 'o' (the last char), not be a no-op
+    stdin.write('x')
+    await delay(50)
+    expect(lastFrame()).toContain('text:hell')
+  })
+
   test('i in normal mode switches back to insert', async () => {
     const { lastFrame, stdin } = render(
       <EditorHarness multiline initialText="hello" />,

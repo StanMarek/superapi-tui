@@ -112,6 +112,9 @@ export function useLineEditor(options: LineEditorOptions = {}): LineEditorState 
 
     if (key.escape) {
       if (multiline) {
+        if (textRef.current.length > 0 && cursorRef.current >= textRef.current.length) {
+          cursorRef.current = textRef.current.length - 1
+        }
         setMode('normal')
         flushNow()
         return 'handled'
