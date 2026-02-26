@@ -28,4 +28,10 @@ describe('useTerminalHeight', () => {
     await delay(50)
     expect(lastFrame()!).toContain('height:10')
   })
+
+  test('clamps override of 0 to minimum 1', async () => {
+    const { lastFrame } = render(<Harness override={0} />)
+    await delay(50)
+    expect(lastFrame()!).toContain('height:1')
+  })
 })

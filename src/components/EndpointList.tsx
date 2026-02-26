@@ -82,10 +82,11 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
 
   const clampCursor = (index: number) => Math.max(0, Math.min(index, rows.length - 1))
 
+  const hasBudget = terminalHeight !== undefined
   const reservedLines = 6 + (isFiltering ? 1 : 0)
   const viewport = useViewport({
-    rowCount: rows.length,
-    cursorIndex,
+    rowCount: hasBudget ? rows.length : 0,
+    cursorIndex: hasBudget ? cursorIndex : 0,
     reservedLines,
     terminalHeight,
   })
@@ -227,9 +228,9 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
         </Box>
       )}
       <Box flexDirection="column" marginTop={isFiltering ? 0 : 1}>
-        <ScrollIndicator direction="up" visible={viewport.hasOverflowAbove} />
-        {rows.slice(viewport.scrollOffset, viewport.scrollOffset + viewport.visibleCount).map((row, localIndex) => {
-          const globalIndex = viewport.scrollOffset + localIndex
+        <ScrollIndicator direction="up" visible={hasBudget && viewport.hasOverflowAbove} />
+        {(hasBudget ? rows.slice(viewport.scrollOffset, viewport.scrollOffset + viewport.visibleCount) : rows).map((row, localIndex) => {
+          const globalIndex = hasBudget ? viewport.scrollOffset + localIndex : localIndex
           const isSelected = globalIndex === cursorIndex && isFocused
           if (row.kind === 'tag') {
             const indicator = collapsedTags.has(row.tag) ? '\u25B6' : '\u25BC'
@@ -254,7 +255,7 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
             </Box>
           )
         })}
-        <ScrollIndicator direction="down" visible={viewport.hasOverflowBelow} />
+        <ScrollIndicator direction="down" visible={hasBudget && viewport.hasOverflowBelow} />
       </Box>
     </Box>
   )

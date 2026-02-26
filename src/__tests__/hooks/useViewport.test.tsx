@@ -109,4 +109,52 @@ describe('useViewport', () => {
     const visible = parseInt(frame.match(/visible:(\d+)/)?.[1] ?? '0')
     expect(visible).toBeGreaterThanOrEqual(1)
   })
+
+  test('visibleCount stays stable across all scroll positions (no oscillation)', async () => {
+    // Regression test: old two-pass approach could oscillate content height
+    // when indicator count changed between passes
+    const { lastFrame, stdin } = render(<Harness rowCount={20} reservedLines={6} terminalHeight={16} />)
+    await delay(50)
+
+    // Capture visible count at top (only "below" indicator)
+    let frame = lastFrame()!
+    const visibleAtTop = parseInt(frame.match(/visible:(\d+)/)?.[1] ?? '0')
+
+    // Move to middle (both indicators)
+    for (let i = 0; i < 10; i++) {
+      stdin.write('j')
+      await delay(20)
+    }
+    await delay(50)
+    frame = lastFrame()!
+    const visibleAtMiddle = parseInt(frame.match(/visible:(\d+)/)?.[1] ?? '0')
+
+    // Jump to bottom (only "above" indicator)
+    stdin.write('G')
+    await delay(50)
+    frame = lastFrame()!
+    const visibleAtBottom = parseInt(frame.match(/visible:(\d+)/)?.[1] ?? '0')
+
+    // Content height must be stable regardless of scroll position
+    expect(visibleAtTop).toBe(visibleAtMiddle)
+    expect(visibleAtMiddle).toBe(visibleAtBottom)
+  })
+
+  test('negative cursorIndex is clamped to 0', async () => {
+    // useViewport should handle negative cursorIndex gracefully
+    function NegativeCursorHarness() {
+      const viewport = useViewport({ rowCount: 10, cursorIndex: -5, reservedLines: 2, terminalHeight: 20 })
+      return (
+        <Box flexDirection="column">
+          <Text>offset:{viewport.scrollOffset}</Text>
+          <Text>visible:{viewport.visibleCount}</Text>
+        </Box>
+      )
+    }
+    const { lastFrame } = render(<NegativeCursorHarness />)
+    await delay(50)
+    const frame = lastFrame()!
+    expect(frame).toContain('offset:0')
+    expect(frame).toContain('visible:10')
+  })
 })

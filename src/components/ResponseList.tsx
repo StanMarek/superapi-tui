@@ -16,6 +16,39 @@ function statusColor(code: string): string | undefined {
   return undefined
 }
 
+function estimateSchemaLines(schema: SchemaInfo, depth: number = 0): number {
+  if (depth > 10) return 1
+  if (schema.refName && depth > 0) return 1
+
+  let lines = 0
+
+  // Composition types
+  for (const key of ['allOf', 'oneOf', 'anyOf'] as const) {
+    const schemas = schema[key]
+    if (schemas && schemas.length > 0) {
+      lines += 1 // composition label
+      for (const sub of schemas) {
+        lines += estimateSchemaLines(sub, depth + 1)
+      }
+    }
+  }
+
+  // Object properties
+  if (schema.properties) {
+    for (const [, propSchema] of schema.properties) {
+      lines += 1 // property line
+      // Nested inline objects add lines
+      if (propSchema.properties && !propSchema.refName) {
+        lines += estimateSchemaLines(propSchema, depth + 1)
+      }
+    }
+  } else if (lines === 0) {
+    lines = 1 // primitive type display
+  }
+
+  return Math.max(1, lines)
+}
+
 function estimateResponseLines(response: ResponseInfo): number {
   let lines = 1 // status line
   if (response.content.length > 0) {
@@ -23,12 +56,7 @@ function estimateResponseLines(response: ResponseInfo): number {
       lines += 1 // media type line
       if (media.schema) {
         if (media.schema.refName) lines += 1
-        // Schema fields
-        if (media.schema.properties) {
-          lines += media.schema.properties.size
-        } else {
-          lines += 1 // primitive type display
-        }
+        lines += estimateSchemaLines(media.schema)
       }
     }
   } else {

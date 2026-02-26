@@ -670,7 +670,11 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
                 {cappedLines.map((line, i) => (
                   <Text key={i} color={isJson ? colorForJsonLine(line) : undefined}>{line}</Text>
                 ))}
-                {wasTruncated && <Text dimColor>... ({lines.length - cappedLines.length} more lines)</Text>}
+                {wasTruncated && (
+                  <Text dimColor>
+                    ... ({lines.length - cappedLines.length} more lines{hasBudget ? ' — scroll to see' : ''})
+                  </Text>
+                )}
               </Box>
             )
           }
@@ -678,7 +682,7 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
           if (state.activeTab === 'raw') {
             const rawCap = hasBudget ? dynamicCap * 80 : RAW_CHAR_CAP
             const raw = res.body.length > rawCap
-              ? res.body.slice(0, rawCap) + `\n... (${res.body.length - rawCap} more chars)`
+              ? res.body.slice(0, rawCap) + `\n... (${res.body.length - rawCap} more chars${hasBudget ? ' — scroll to see' : ''})`
               : res.body
             return (
               <Box key="response" marginTop={1} flexDirection="column">
@@ -705,7 +709,7 @@ export function RequestPanel({ endpoint, isFocused, servers, securitySchemes, on
                   </Box>
                 ))}
                 {cappedHeaders.length < allHeaders.length && (
-                  <Text dimColor>... ({allHeaders.length - cappedHeaders.length} more headers)</Text>
+                  <Text dimColor>... ({allHeaders.length - cappedHeaders.length} more headers{hasBudget ? ' — scroll to see' : ''})</Text>
                 )}
               </Box>
             )

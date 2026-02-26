@@ -16,15 +16,17 @@ export interface ViewportState {
 }
 
 const MIN_VISIBLE = 1
+const INDICATOR_LINES = 2 // always reserve both above + below indicators when scrolling
 
 export function useViewport(options: ViewportOptions): ViewportState {
-  const { rowCount, cursorIndex, reservedLines, terminalHeight: heightOverride } = options
+  const { rowCount, reservedLines, terminalHeight: heightOverride } = options
+  const cursorIndex = Math.max(0, options.cursorIndex)
   const terminalHeight = useTerminalHeight(heightOverride)
   const scrollOffsetRef = useRef(0)
 
   const rawAvailable = Math.max(MIN_VISIBLE, terminalHeight - reservedLines)
 
-  // No scrolling needed
+  // No scrolling needed — all rows fit
   if (rowCount <= rawAvailable) {
     scrollOffsetRef.current = 0
     return {
@@ -35,45 +37,32 @@ export function useViewport(options: ViewportOptions): ViewportState {
     }
   }
 
-  // Need scrolling — compute with scroll indicator overhead
+  // Scrolling needed — reserve both indicator lines upfront to prevent oscillation.
+  // This is conservative (we always subtract 2 even when only 1 indicator shows)
+  // but it guarantees stable content height regardless of scroll position.
+  const contentHeight = Math.max(MIN_VISIBLE, rawAvailable - INDICATOR_LINES)
+
   let scrollOffset = scrollOffsetRef.current
 
-  // Keep cursor in visible range (first pass with raw available)
-  if (cursorIndex < scrollOffset) {
-    scrollOffset = cursorIndex
-  } else if (cursorIndex >= scrollOffset + rawAvailable) {
-    scrollOffset = cursorIndex - rawAvailable + 1
-  }
-
-  // Clamp offset
-  scrollOffset = Math.max(0, Math.min(scrollOffset, rowCount - rawAvailable))
-
-  // Compute overflow indicators
-  const hasAbove = scrollOffset > 0
-  const hasBelow = scrollOffset + rawAvailable < rowCount
-
-  // Subtract indicator lines from content
-  const indicatorLines = (hasAbove ? 1 : 0) + (hasBelow ? 1 : 0)
-  const contentHeight = Math.max(MIN_VISIBLE, rawAvailable - indicatorLines)
-
-  // Re-adjust cursor visibility with reduced content height
+  // Keep cursor in visible range
   if (cursorIndex < scrollOffset) {
     scrollOffset = cursorIndex
   } else if (cursorIndex >= scrollOffset + contentHeight) {
     scrollOffset = cursorIndex - contentHeight + 1
   }
+
+  // Clamp offset
   scrollOffset = Math.max(0, Math.min(scrollOffset, rowCount - contentHeight))
 
-  // Recompute overflow with final values
-  const finalAbove = scrollOffset > 0
-  const finalBelow = scrollOffset + contentHeight < rowCount
+  const hasOverflowAbove = scrollOffset > 0
+  const hasOverflowBelow = scrollOffset + contentHeight < rowCount
 
   scrollOffsetRef.current = scrollOffset
 
   return {
     scrollOffset,
     visibleCount: contentHeight,
-    hasOverflowAbove: finalAbove,
-    hasOverflowBelow: finalBelow,
+    hasOverflowAbove,
+    hasOverflowBelow,
   }
 }

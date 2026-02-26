@@ -180,8 +180,9 @@ export function EndpointDetail({ endpoint, isFocused, componentSchemas, onTextCa
   // Count expanded content sections
   const expandedContentCount = rows.filter(r => r.type === 'content').length
   // Budget for content = panel height - header lines, divided among expanded sections
+  // Math.max(0, ...) on numerator prevents negative division when terminal is tiny
   const contentBudget = hasBudget && expandedContentCount > 0
-    ? Math.max(1, Math.floor((sectionPanelHeight - headerLineCount) / expandedContentCount))
+    ? Math.max(1, Math.floor(Math.max(0, sectionPanelHeight - headerLineCount) / expandedContentCount))
     : 0
 
   // Schema drill-down view
