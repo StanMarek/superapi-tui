@@ -344,5 +344,109 @@ describe('EndpointList', () => {
       expect(frame).not.toContain('\u25BC')
       expect(frame).not.toContain('\u25B6')
     })
+
+    it('selects endpoint on Enter in filter mode and exits typing', async () => {
+      const onSelect = mock(() => {})
+      const onTextCapture = mock(() => {})
+      const { lastFrame, stdin } = render(
+        <EndpointList
+          tagGroups={tagGroups}
+          isFocused={true}
+          onSelectEndpoint={onSelect}
+          onTextCaptureChange={onTextCapture}
+        />,
+      )
+      stdin.write('/')
+      await delay(50)
+      stdin.write('inventory')
+      await delay(50)
+      stdin.write('\r')
+      await delay(50)
+      expect(onSelect).toHaveBeenCalledTimes(1)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((onSelect.mock.calls as any)[0][0].path).toBe('/store/inventory')
+      const calls = onTextCapture.mock.calls as unknown as [boolean][]
+      expect(calls[calls.length - 1]![0]).toBe(false)
+    })
+
+    it('shows filter hint after Enter exits typing mode', async () => {
+      const onSelect = mock(() => {})
+      const { lastFrame, stdin } = render(
+        <EndpointList tagGroups={tagGroups} isFocused={true} onSelectEndpoint={onSelect} />,
+      )
+      stdin.write('/')
+      await delay(50)
+      stdin.write('pet')
+      await delay(50)
+      stdin.write('\r')
+      await delay(50)
+      const frame = lastFrame()!
+      expect(frame).toContain('/pets')
+      expect(frame).toContain('pet')
+      expect(frame).not.toContain('\u25B6')
+      expect(frame).not.toContain('\u25BC')
+    })
+
+    it('Esc from applied filter clears hint and restores normal view', async () => {
+      const onSelect = mock(() => {})
+      const { lastFrame, stdin } = render(
+        <EndpointList tagGroups={tagGroups} isFocused={true} onSelectEndpoint={onSelect} />,
+      )
+      stdin.write('/')
+      await delay(50)
+      stdin.write('pet')
+      await delay(50)
+      stdin.write('\r')
+      await delay(50)
+      stdin.write('\x1b')
+      await delay(50)
+      const frame = lastFrame()!
+      expect(frame).toContain('\u25B6')
+      expect(frame).toContain('pets')
+      expect(frame).toContain('store')
+      expect(frame).not.toContain('/pets')
+      expect(frame).not.toContain('/store/inventory')
+    })
+
+    it('allows navigation and selection in applied filter mode', async () => {
+      const onSelect = mock(() => {})
+      const { lastFrame, stdin } = render(
+        <EndpointList tagGroups={tagGroups} isFocused={true} onSelectEndpoint={onSelect} />,
+      )
+      stdin.write('/')
+      await delay(50)
+      stdin.write('pet')
+      await delay(50)
+      stdin.write('\r')
+      await delay(50)
+      expect(onSelect).toHaveBeenCalledTimes(1)
+      stdin.write('j')
+      await delay(50)
+      stdin.write('\r')
+      await delay(50)
+      expect(onSelect).toHaveBeenCalledTimes(2)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((onSelect.mock.calls as any)[1][0].path).toBe('/pets')
+      expect((onSelect.mock.calls as any)[1][0].method).toBe('post')
+    })
+
+    it('re-entering filter from applied mode preserves filter text', async () => {
+      const onSelect = mock(() => {})
+      const { lastFrame, stdin } = render(
+        <EndpointList tagGroups={tagGroups} isFocused={true} onSelectEndpoint={onSelect} />,
+      )
+      stdin.write('/')
+      await delay(50)
+      stdin.write('pet')
+      await delay(50)
+      stdin.write('\r')
+      await delay(50)
+      stdin.write('/')
+      await delay(50)
+      const frame = lastFrame()!
+      expect(frame).toContain('pet')
+      expect(frame).toContain('/pets')
+      expect(frame).not.toContain('/store/inventory')
+    })
   })
 })
