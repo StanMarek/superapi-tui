@@ -382,7 +382,7 @@ describe('EndpointList', () => {
       await delay(50)
       const frame = lastFrame()!
       expect(frame).toContain('/pets')
-      expect(frame).toContain('pet')
+      expect(frame).toContain('filter: pet')
       expect(frame).not.toContain('\u25B6')
       expect(frame).not.toContain('\u25BC')
     })
