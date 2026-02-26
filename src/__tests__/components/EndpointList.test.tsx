@@ -348,7 +348,7 @@ describe('EndpointList', () => {
     it('selects endpoint on Enter in filter mode and exits typing', async () => {
       const onSelect = mock(() => {})
       const onTextCapture = mock(() => {})
-      const { lastFrame, stdin } = render(
+      const { stdin } = render(
         <EndpointList
           tagGroups={tagGroups}
           isFocused={true}
@@ -410,7 +410,7 @@ describe('EndpointList', () => {
 
     it('allows navigation and selection in applied filter mode', async () => {
       const onSelect = mock(() => {})
-      const { lastFrame, stdin } = render(
+      const { stdin } = render(
         <EndpointList tagGroups={tagGroups} isFocused={true} onSelectEndpoint={onSelect} />,
       )
       stdin.write('/')
@@ -427,6 +427,7 @@ describe('EndpointList', () => {
       expect(onSelect).toHaveBeenCalledTimes(2)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect((onSelect.mock.calls as any)[1][0].path).toBe('/pets')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect((onSelect.mock.calls as any)[1][0].method).toBe('post')
     })
 

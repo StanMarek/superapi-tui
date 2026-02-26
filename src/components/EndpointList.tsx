@@ -9,6 +9,8 @@ type ListRow =
   | { readonly kind: 'tag'; readonly tag: string; readonly count: number }
   | { readonly kind: 'endpoint'; readonly endpoint: Endpoint; readonly tag: string }
 
+type FilterMode = 'off' | 'typing' | 'applied'
+
 interface Props {
   readonly tagGroups: readonly TagGroup[]
   readonly isFocused: boolean
@@ -65,7 +67,7 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
     () => new Set(tagGroups.map(g => g.name)),
   )
   const [filterText, setFilterText] = useState('')
-  const [isFiltering, setIsFiltering] = useState(false)
+  const [filterMode, setFilterMode] = useState<FilterMode>('off')
 
   // Re-collapse all tags when tagGroups change (e.g., new spec loaded)
   useEffect(() => {
@@ -74,16 +76,16 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
   }, [tagGroups])
 
   const rows = useMemo(() => {
-    if (isFiltering) {
+    if (filterMode !== 'off') {
       return buildFilteredRows(tagGroups, filterText)
     }
     return buildRows(tagGroups, collapsedTags)
-  }, [tagGroups, collapsedTags, isFiltering, filterText])
+  }, [tagGroups, collapsedTags, filterMode, filterText])
 
   const clampCursor = (index: number) => Math.max(0, Math.min(index, rows.length - 1))
 
   const hasBudget = terminalHeight !== undefined
-  const reservedLines = 6 + (isFiltering ? 1 : 0)
+  const reservedLines = 6 + (filterMode !== 'off' ? 1 : 0)
   const viewport = useViewport({
     rowCount: hasBudget ? rows.length : 0,
     cursorIndex: hasBudget ? cursorIndex : 0,
@@ -123,17 +125,20 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
 
   useInput(
     (input, key) => {
-      if (isFiltering) {
-        // Filter mode input handling
+      if (filterMode === 'typing') {
         if (key.escape) {
-          setIsFiltering(false)
+          setFilterMode('off')
           setFilterText('')
           setCursorIndex(0)
           onTextCaptureChange?.(false)
           return
         }
         if (key.return) {
-          setIsFiltering(false)
+          const currentRow = rows[cursorIndex]
+          if (currentRow?.kind === 'endpoint') {
+            onSelectEndpoint(currentRow.endpoint)
+          }
+          setFilterMode('applied')
           onTextCaptureChange?.(false)
           return
         }
@@ -142,7 +147,6 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
           setCursorIndex(0)
           return
         }
-        // Accumulate typed characters (ignore control keys)
         if (input && !key.ctrl && !key.meta) {
           setFilterText(prev => prev + input)
           setCursorIndex(0)
@@ -150,9 +154,22 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
         return
       }
 
-      // Normal mode
-      if (input === '/') {
-        setIsFiltering(true)
+      if (filterMode === 'applied') {
+        if (key.escape) {
+          setFilterMode('off')
+          setFilterText('')
+          setCursorIndex(0)
+          return
+        }
+        if (input === '/') {
+          setFilterMode('typing')
+          onTextCaptureChange?.(true)
+          return
+        }
+      }
+
+      if (input === '/' && filterMode === 'off') {
+        setFilterMode('typing')
         setFilterText('')
         setCursorIndex(0)
         onTextCaptureChange?.(true)
@@ -190,25 +207,26 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
         return
       }
 
-      if (input === 'h') {
-        const tag = getTagAtCursor(rows, cursorIndex)
-        if (tag) {
-          collapseTag(tag)
-          // Move cursor to the tag header row when collapsing
-          const tagRowIndex = rows.findIndex(r => r.kind === 'tag' && r.tag === tag)
-          if (tagRowIndex >= 0) {
-            setCursorIndex(tagRowIndex)
+      if (filterMode === 'off') {
+        if (input === 'h') {
+          const tag = getTagAtCursor(rows, cursorIndex)
+          if (tag) {
+            collapseTag(tag)
+            const tagRowIndex = rows.findIndex(r => r.kind === 'tag' && r.tag === tag)
+            if (tagRowIndex >= 0) {
+              setCursorIndex(tagRowIndex)
+            }
           }
+          return
         }
-        return
-      }
 
-      if (input === 'l') {
-        const tag = getTagAtCursor(rows, cursorIndex)
-        if (tag) {
-          expandTag(tag)
+        if (input === 'l') {
+          const tag = getTagAtCursor(rows, cursorIndex)
+          if (tag) {
+            expandTag(tag)
+          }
+          return
         }
-        return
       }
     },
     { isActive: isFocused },
@@ -219,7 +237,7 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
       <Text bold dimColor={!isFocused}>
         Endpoints
       </Text>
-      {isFiltering && (
+      {filterMode === 'typing' && (
         <Box marginTop={1}>
           <Text>
             / {filterText}
@@ -227,7 +245,14 @@ export function EndpointList({ tagGroups, isFocused, onSelectEndpoint, onTextCap
           </Text>
         </Box>
       )}
-      <Box flexDirection="column" marginTop={isFiltering ? 0 : 1}>
+      {filterMode === 'applied' && (
+        <Box marginTop={1}>
+          <Text dimColor>
+            filter: {filterText}
+          </Text>
+        </Box>
+      )}
+      <Box flexDirection="column" marginTop={filterMode !== 'off' ? 0 : 1}>
         <ScrollIndicator direction="up" visible={hasBudget && viewport.hasOverflowAbove} />
         {(hasBudget ? rows.slice(viewport.scrollOffset, viewport.scrollOffset + viewport.visibleCount) : rows).map((row, localIndex) => {
           const globalIndex = hasBudget ? viewport.scrollOffset + localIndex : localIndex
