@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - 2026-02-27
+## [0.1.1] - 2026-02-27
 
 ### Added
 
@@ -23,6 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Vim-like line editor** — cursor-aware text editing for inline input fields
 - **Virtualized viewport scrolling** — smooth scrolling for large endpoint lists and detail sections
 - **CLI flags** — `--help` / `-h` and `--version` / `-v`
-- **Node.js compatibility** — runs under Node.js 18+ via `npx superapi-tui`
+- **Node.js compatibility** — runs under Node.js 20+ via `npx superapi-tui`
 
-[0.1.0]: https://github.com/StanMarek/superapi-tui/releases/tag/v0.1.0
+[0.1.1]: https://github.com/StanMarek/superapi-tui/releases/tag/v0.1.1
