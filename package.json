@@ -34,7 +34,7 @@
     "url": "https://github.com/StanMarek/superapi-tui/issues"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "dependencies": {
     "@inkjs/ui": "^2.0.0",
