@@ -89,10 +89,10 @@ describe('useNavigation', () => {
     // If q were treated as normal input, panel would stay the same
     // (q is not a navigation key). After exit(), Tab no longer cycles.
     stdin.write('q')
-    await delay(50)
+    await delay(100)
     // App called exit() — subsequent Tab has no effect
     stdin.write('\t')
-    await delay(50)
+    await delay(100)
     expect(lastFrame()).toContain('panel:endpoints')
   })
 
