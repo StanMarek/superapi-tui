@@ -17,7 +17,13 @@ export function getJsonConfigPath(): string {
 async function tryReadFile(path: string): Promise<string | null> {
   try {
     return await readFile(path, 'utf-8')
-  } catch {
+  } catch (err) {
+    const code = err instanceof Error && 'code' in err
+      ? (err as NodeJS.ErrnoException).code
+      : undefined
+    if (code !== 'ENOENT') {
+      console.warn(`superapi-tui: failed to read ${path}: ${code ?? 'unknown error'}`)
+    }
     return null
   }
 }

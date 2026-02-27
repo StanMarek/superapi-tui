@@ -6,14 +6,14 @@ import { SpecLoader } from './components/SpecLoader.js'
 
 const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0-dev'
 
-const arg = process.argv[2]
+const args = process.argv.slice(2)
 
-if (arg === '--version' || arg === '-v') {
+if (args.includes('--version') || args.includes('-v')) {
   console.log(version)
   process.exit(0)
 }
 
-if (arg === '--help' || arg === '-h') {
+if (args.includes('--help') || args.includes('-h')) {
   console.log(`superapi-tui v${version}
 
 Usage: superapi-tui [file-or-url]
@@ -35,13 +35,14 @@ Run without arguments to launch the interactive server picker.`)
   process.exit(0)
 }
 
-if (process.argv.length > 3) {
+const positional = args.filter(a => !a.startsWith('-'))
+if (positional.length > 1) {
   console.error('Error: too many arguments. Expected: superapi-tui <file-or-url>')
   console.error('Run superapi-tui --help for usage.')
   process.exit(1)
 }
 
-const input = arg || undefined
+const input = positional[0] || undefined
 
 try {
   const { waitUntilExit } = render(<SpecLoader input={input} />)

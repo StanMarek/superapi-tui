@@ -1,15 +1,10 @@
-import { readFile, access } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import type { LoadResult } from '@/types/index.js'
 import { SpecLoadError } from '@/types/index.js'
 import { detectSpecFormat } from './detect.js'
 
 export async function loadFromFile(filePath: string): Promise<LoadResult> {
   try {
-    try {
-      await access(filePath)
-    } catch {
-      throw new SpecLoadError(`File not found: ${filePath}`)
-    }
     const content = await readFile(filePath, 'utf-8')
     return {
       content,
@@ -18,7 +13,12 @@ export async function loadFromFile(filePath: string): Promise<LoadResult> {
       source: filePath,
     }
   } catch (error) {
-    if (error instanceof SpecLoadError) throw error
-    throw new SpecLoadError(`Failed to read file: ${filePath}`, error)
+    const code = error instanceof Error && 'code' in error
+      ? (error as NodeJS.ErrnoException).code
+      : undefined
+    if (code === 'ENOENT') {
+      throw new SpecLoadError(`File not found: ${filePath}`, error)
+    }
+    throw new SpecLoadError(`Cannot access file: ${filePath}`, error)
   }
 }
