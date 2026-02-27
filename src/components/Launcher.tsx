@@ -125,7 +125,7 @@ export function Launcher({ onSelect, deps }: Props) {
       </Text>
       <Text dimColor>Enter a spec URL or file path</Text>
       <Box marginTop={1}>
-        <TextInput placeholder="https://... or ./path.yaml" onSubmit={handleUrlSubmit} />
+        <TextInput placeholder="https://... or ./path.yaml or Swagger UI URL" onSubmit={handleUrlSubmit} />
       </Box>
     </Box>
   )

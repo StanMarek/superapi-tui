@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { chmod } from 'node:fs/promises'
+import { readFile, writeFile, chmod } from 'node:fs/promises'
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
 import type { ConfigData, SavedServer, SavedAuth, Preferences } from './types.js'
 import { DEFAULT_CONFIG, DEFAULT_PREFERENCES } from './types.js'
@@ -16,10 +16,7 @@ export function getJsonConfigPath(): string {
 
 async function tryReadFile(path: string): Promise<string | null> {
   try {
-    const file = Bun.file(path)
-    const exists = await file.exists()
-    if (!exists) return null
-    return await file.text()
+    return await readFile(path, 'utf-8')
   } catch {
     return null
   }
@@ -105,7 +102,7 @@ export async function saveConfig(data: ConfigData, configPath?: string): Promise
     const content = path.endsWith('.json')
       ? JSON.stringify(plain, null, 2) + '\n'
       : stringifyToml(plain) + '\n'
-    await Bun.write(path, content)
+    await writeFile(path, content, 'utf-8')
     await chmod(path, 0o600)
   } catch (err) {
     throw new ConfigError(`Failed to write config file: ${path}`, err)
