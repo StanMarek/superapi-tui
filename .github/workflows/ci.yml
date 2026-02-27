@@ -26,8 +26,18 @@ jobs:
       - name: Lint
         run: bun run lint
 
-      - name: Test
-        run: bun test
+      - name: Test (unit)
+        run: bun test src/__tests__/config/ src/__tests__/hooks/ src/__tests__/http/ src/__tests__/loader/ src/__tests__/parser/ src/__tests__/utils/
+
+      - name: Test (components — isolated to avoid Ink/mock.module cross-file leakage)
+        run: |
+          failed=0
+          for f in src/__tests__/components/*.tsx; do
+            if ! bun test "$f"; then
+              failed=1
+            fi
+          done
+          exit $failed
 
       - name: Build
         run: bun run build
