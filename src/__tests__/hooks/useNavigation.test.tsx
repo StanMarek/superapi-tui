@@ -90,7 +90,7 @@ describe('useNavigation', () => {
     stdin.write('q')
     await delay(100)
     // After exit(), frame is empty (app has exited)
-    const frame = lastFrame()
+    const frame = lastFrame() ?? ''
     expect(frame === '' || frame === '\n' || !frame.includes('panel:detail')).toBe(true)
   })
 
