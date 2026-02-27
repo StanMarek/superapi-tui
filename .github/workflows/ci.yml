@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Test (unit)
+        run: bun test src/__tests__/config/ src/__tests__/hooks/ src/__tests__/http/ src/__tests__/loader/ src/__tests__/parser/ src/__tests__/utils/
+
+      - name: Test (components — isolated to avoid Ink/mock.module cross-file leakage)
+        run: |
+          failed=0
+          for f in src/__tests__/components/*.tsx; do
+            if ! bun test "$f"; then
+              failed=1
+            fi
+          done
+          exit $failed
+
+      - name: Build
+        run: bun run build
+
+  smoke:
+    needs: ci
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install and build
+        run: bun install --frozen-lockfile && bun run build
+
+      - name: Smoke test (Node.js ${{ matrix.node-version }})
+        run: |
+          node dist/cli.js --version
+          node dist/cli.js --help

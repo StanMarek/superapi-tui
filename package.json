@@ -5,8 +5,12 @@
   "type": "module",
   "main": "./dist/cli.js",
   "bin": {
-    "superapi-tui": "./dist/cli.js"
+    "superapi-tui": "dist/cli.js"
   },
+  "files": [
+    "dist/",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "dev": "bun run src/cli.tsx",
     "build": "bun run build.ts",
@@ -15,12 +19,22 @@
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write 'src/**/*.{ts,tsx}'",
-    "format:check": "prettier --check 'src/**/*.{ts,tsx}'"
+    "format:check": "prettier --check 'src/**/*.{ts,tsx}'",
+    "prepublishOnly": "bun run build"
   },
   "keywords": ["openapi", "swagger", "tui", "terminal", "cli", "api"],
+  "author": "StanMarek",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/StanMarek/superapi-tui.git"
+  },
+  "homepage": "https://github.com/StanMarek/superapi-tui#readme",
+  "bugs": {
+    "url": "https://github.com/StanMarek/superapi-tui/issues"
+  },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "dependencies": {
     "@inkjs/ui": "^2.0.0",
